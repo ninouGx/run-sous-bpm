@@ -1,0 +1,25 @@
+[workspace]
+members = ["api", "core", "integrations"]
+resolver = "3"
+
+[workspace.dependencies]
+axum = "0.8.4"
+tokio = { version = "1.47.0", features = ["full"] }
+sqlx = { version = "0.8.6", features = ["postgres", "uuid", "chrono"] }
+sea-orm = { version = "1.1.14", features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+] }
+reqwest = { version = "0.12.22", features = ["json"] }
+oauth2 = "5.0.0"
+serde = { version = "1.0.219", features = ["derive"] }
+thiserror = "2.0.12"
+anyhow = "1.0.98"
+dotenv = "0.15.0"
+serde_json = "1.0.141"
+tower = "0.5.2"
+tower-http = "0.6.6"
+tracing = "0.1.41"
+tracing-subscriber = "0.3.19"
+uuid = { version = "1.17.0", features = ["v4"] }
+chrono = { version = "0.4.41", features = ["serde"] }
