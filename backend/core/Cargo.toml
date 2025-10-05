@@ -13,3 +13,6 @@ chrono = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
 tokio = { workspace = true }
+oauth2.workspace = true
+dotenv.workspace = true
+strum = { workspace = true }
