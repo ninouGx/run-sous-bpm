@@ -1,6 +1,6 @@
 # Run Sous BPM
 
-A fitness-music analytics platform that correlates fitness activities (Strava) with music listening data (Spotify/Last.fm) to be displayed over maps and .
+An application that synchronizes Spotify listening history with Strava workout routes to visualize which songs were playing at different points during activities. The primary goal is to display music information overlaid on interactive maps showing Strava workout data.
 
 ## Architecture
 
@@ -72,42 +72,79 @@ npm run lint     # Lint and format
 
 ```
 run-sous-bpm/
-├── backend/                 # Rust workspace
-│   ├── api/                # Axum web server
-│   ├── core/               # Business logic
-│   └── integrations/       # External API clients
-├── frontend/               # SvelteKit application
+├── backend/                      # Rust workspace
+│   ├── Cargo.toml               # Workspace definition with shared dependencies
+│   ├── api/                     # Axum web server & REST endpoints
+│   │   ├── src/
+│   │   └── Cargo.toml
+│   ├── core/                    # Business logic & domain models
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── models/         # Domain models
+│   │   │   ├── services/       # Business logic
+│   │   │   └── database/       # Database module
+│   │   │       ├── mod.rs      # Connection utilities
+│   │   │       ├── connection.rs
+│   │   │       └── entities/   # SeaORM generated entities
+│   │   └── Cargo.toml
+│   ├── integrations/            # External API clients (Strava, Spotify)
+│   │   ├── src/
+│   │   └── Cargo.toml
+│   └── migration/               # SeaORM database migrations
+│       ├── src/
+│       │   ├── lib.rs
+│       │   ├── main.rs         # Migration CLI
+│       │   └── m*.rs           # Migration files
+│       └── Cargo.toml
+├── frontend/                    # SvelteKit application
 │   ├── src/
-│   │   ├── routes/        # SvelteKit routes
-│   │   └── lib/           # Shared components
-└── docker/                # Database initialization
+│   │   ├── routes/             # SvelteKit routes
+│   │   └── lib/                # Shared components
+│   └── package.json
+└── docker-compose.yml          # PostgreSQL + TimescaleDB
 ```
 
 ## Development Workflow
 
 ### Database Management
 
+**Run migrations:**
+```bash
+cd backend
+cargo run --package migration
+```
+
+**Generate entities from schema:**
+```bash
+cd backend
+sea-orm-cli generate entity -o core/src/database/entities
+```
+
 The TimescaleDB database includes:
-- **Hypertables**: Optimized for time-series data
-- **Users & OAuth tokens**: Multi-provider authentication
-- **Workout metrics**: Activity data from Strava
-- **Music events**: Listening data correlated with workouts
+- **Hypertables**: Optimized for GPS coordinates and music events
+- **Users & OAuth tokens**: Spotify and Strava authentication
+- **Workout routes**: GPS data from Strava activities
+- **Music timeline**: Spotify listening history with timestamps
+- **Synchronized sessions**: Correlated music and workout data for map visualization
 
 ### API Integration
 
-- **Strava**: Workout data and real-time webhooks
-- **Spotify/Last.fm**: Music listening history
+- **Strava**: Workout GPS routes and activity data
+- **Spotify**: Music listening history with timestamps
+- **Data Synchronization**: Match music timestamps with GPS coordinates
 - **Rate limiting**: Circuit breakers and backoff strategies
 - **Token management**: Secure storage with refresh rotation
 
 ## Key Features (Planned)
 
-- [ ] Multi-provider OAuth authentication
-- [ ] Real-time workout tracking
-- [ ] Music correlation analytics
-- [ ] Interactive data visualizations
-- [ ] Performance insights dashboard
-- [ ] Export capabilities
+- [ ] Spotify OAuth integration for music history
+- [ ] Strava OAuth integration for workout data
+- [ ] Interactive maps displaying workout routes
+- [ ] Music timeline overlay on GPS coordinates
+- [ ] Synchronized playback visualization
+- [ ] Future: Real-time workout tracking with live music updates
+- [ ] Future: Statistical analysis of music tempo/energy vs performance
+- [ ] Future: Export capabilities for data analysis
 
 ## Security
 

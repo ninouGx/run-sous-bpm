@@ -18,3 +18,4 @@ dotenv = { workspace = true }
 run-sous-bpm-core = { path = "../core" }
 run-sous-bpm-integrations = { path = "../integrations" }
 chrono.workspace = true
+strum = { workspace = true, features = ["derive"] }
