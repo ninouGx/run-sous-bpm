@@ -6,12 +6,12 @@ resolver = "3"
 axum = "0.8.6"
 tokio = { version = "1.47.1", features = ["full"] }
 sqlx = { version = "0.8.6", features = ["postgres", "uuid", "chrono"] }
-sea-orm = { version = "1.1.16", features = [
+sea-orm = { version = "1.1.17", features = [
     "sqlx-postgres",
     "runtime-tokio-native-tls",
     "macros",
 ] }
-sea-orm-migration = { version = "1.1.16", features = [
+sea-orm-migration = { version = "1.1.17", features = [
     "sqlx-postgres",
     "runtime-tokio-native-tls",
 ] }
@@ -20,7 +20,7 @@ oauth2 = "5.0.0"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"
 anyhow = "1.0.100"
-dotenv = "0.15.0"
+dotenvy = "0.15.7"
 serde_json = "1.0.145"
 tower = "0.5.2"
 tower-http = "0.6.6"
@@ -29,3 +29,4 @@ tracing-subscriber = "0.3.20"
 uuid = { version = "1.18.1", features = ["v4"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 strum = { version = "0.27.2", features = ["derive"] }
+moka = { version = "0.12.11", features = ["sync"] }
