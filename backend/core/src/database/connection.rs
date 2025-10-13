@@ -1,5 +1,5 @@
 use sea_orm::{ Database, DbErr, DatabaseConnection };
-use dotenv::dotenv;
+use dotenvy::dotenv;
 
 pub async fn establish_db_connection() -> Result<DatabaseConnection, DbErr> {
     dotenv().ok();
