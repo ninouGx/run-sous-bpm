@@ -7,7 +7,7 @@ An application that synchronizes Spotify listening history with Strava workout r
 - **Backend**: Rust with Axum web framework
 - **Frontend**: SvelteKit with TypeScript
 - **Database**: PostgreSQL with TimescaleDB for time-series data
-- **Cache**: Redis
+- **Cache**: Moka (in-memory cache for OAuth state, CSRF tokens, PKCE verifiers)
 - **Authentication**: Multi-provider OAuth2 with PKCE
 
 ## Quick Start
@@ -33,7 +33,6 @@ docker-compose up -d
 
 This starts:
 - PostgreSQL with TimescaleDB (port 5433)
-- Redis (port 6379)
 
 ### 3. Backend Development
 
@@ -148,8 +147,10 @@ The TimescaleDB database includes:
 
 ## Security
 
-- OAuth tokens encrypted with AES-256
+- OAuth access/refresh tokens encrypted with AES-256 in PostgreSQL
+- CSRF tokens and PKCE verifiers cached in-memory (Moka) with 10-minute TTL
 - PKCE flow for all OAuth implementations
+- State parameter validation prevents CSRF attacks
 - Rate limiting: 1000 requests/hour per user
 - GDPR compliance with data retention policies
 - Input validation on all API endpoints
