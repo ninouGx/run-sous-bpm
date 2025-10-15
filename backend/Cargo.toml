@@ -3,6 +3,7 @@ members = ["api", "core", "integrations", "migration"]
 resolver = "3"
 
 [workspace.dependencies]
+axum-login = { version = "0.18.0" }
 axum = "0.8.6"
 tokio = { version = "1.47.1", features = ["full"] }
 sqlx = { version = "0.8.6", features = ["postgres", "uuid", "chrono"] }
@@ -15,7 +16,7 @@ sea-orm-migration = { version = "1.1.17", features = [
     "sqlx-postgres",
     "runtime-tokio-native-tls",
 ] }
-reqwest = { version = "0.12.23", features = ["json"] }
+reqwest = { version = "0.12.24", features = ["json"] }
 oauth2 = "5.0.0"
 serde = { version = "1.0.228", features = ["derive"] }
 thiserror = "2.0.17"
@@ -25,8 +26,12 @@ serde_json = "1.0.145"
 tower = "0.5.2"
 tower-http = "0.6.6"
 tracing = "0.1.41"
-tracing-subscriber = "0.3.20"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 uuid = { version = "1.18.1", features = ["v4"] }
 chrono = { version = "0.4.42", features = ["serde"] }
 strum = { version = "0.27.2", features = ["derive"] }
 moka = { version = "0.12.11", features = ["sync"] }
+argon2 = { version = "0.5.3", features = ["std"] }
+rand_core = { version = "0.9.3", features = ["std"] }
+tower-sessions = { version = "0.14.0", features = ["memory-store"] }
+validator = "0.20.0"
