@@ -1,22 +1,44 @@
 use std::sync::Arc;
 
-use axum::{ extract::{ Path, Query }, http::StatusCode, response::Json, Extension };
-use serde_json::{ json, Value };
+use axum::{ Extension, extract::{ Path, Query }, http::StatusCode, response::Json };
+use axum_login::AuthSession;
 use run_sous_bpm_core::{
+    auth::AuthBackend,
     config::OAuthProvider,
-    services::{ oauth::start_oauth_flow, OAuthSessionManager },
+    services::{ OAuthSessionManager, handle_oauth_callback, oauth::start_oauth_flow },
 };
+use sea_orm::DatabaseConnection;
+use serde_json::{ Value, json };
 
 pub async fn oauth_callback(
     Path(provider): Path<String>,
-    Extension(session_manager): Extension<Arc<OAuthSessionManager>>
+    Extension(session_manager): Extension<Arc<OAuthSessionManager>>,
+    auth_session: AuthSession<AuthBackend>
 ) -> (StatusCode, Json<Value>) {
+    let user = match auth_session.user {
+        Some(user) => user,
+        None => {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(
+                    json!({
+                    "error": "Unauthorized",
+                    "message": "You must be logged in to connect OAuth providers"
+                })
+                ),
+            );
+        }
+    };
+
     match provider.parse::<OAuthProvider>() {
         Ok(provider) => {
-            let auth_url = start_oauth_flow(provider, &session_manager);
-            (StatusCode::OK, Json(json!({
-                "auth_url": auth_url,
-            })))
+            let auth_url = start_oauth_flow(provider, &session_manager, user.id);
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "auth_url": auth_url,
+                })),
+            )
         }
         Err(_) =>
             (
@@ -37,22 +59,34 @@ pub struct OAuthCallbackParams {
     state: String,
 }
 
-//GET /api/oauth/callback?code=...&state=...`
-// This handler would process the OAuth callback, validate the CSRF token, exchange the code for tokens, and store them securely.
 pub async fn oauth_process_callback(
     params: Query<OAuthCallbackParams>,
-    Extension(_session_manager): Extension<Arc<OAuthSessionManager>>
+    Extension(session_manager): Extension<Arc<OAuthSessionManager>>,
+    Extension(db_connection): Extension<DatabaseConnection>
 ) -> (StatusCode, Json<Value>) {
     let (code, state) = (params.code.clone(), params.state.clone());
-    // Here you would add the logic to validate the CSRF token (state), exchange the code for tokens,
-    (
-        StatusCode::OK,
-        Json(
-            json!({
-                "message": "OAuth callback received",
-                "code": code,
-                "state": state
+    match
+        handle_oauth_callback(code.clone(), state.clone(), &session_manager, &db_connection).await
+    {
+        Ok(_token_response) =>
+            (
+                StatusCode::OK,
+                Json(
+                    json!({
+                "message": "OAuth process completed successfully",
             })
-        ),
-    )
+                ),
+            ),
+        Err(e) => {
+            (
+                StatusCode::BAD_REQUEST,
+                Json(
+                    json!({
+                    "error": "Failed to process OAuth callback",
+                    "message": e.to_string(),
+                })
+                ),
+            )
+        }
+    }
 }
