@@ -21,6 +21,7 @@ pub struct AuthBackend {
 }
 
 impl AuthBackend {
+    #[must_use]
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
     }
@@ -47,8 +48,7 @@ impl AuthnBackend for AuthBackend {
                 user.password_hash.as_deref().unwrap_or_default(),
             ) {
                 Ok(true) => Ok(Some(user)),
-                Ok(false) => Ok(None),
-                Err(_) => Ok(None),
+                Ok(false) | Err(_) => Ok(None),
             }
         } else {
             Ok(None)

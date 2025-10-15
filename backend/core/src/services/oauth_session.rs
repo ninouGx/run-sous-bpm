@@ -1,5 +1,6 @@
-use std::time::Duration;
 use moka::sync::Cache;
+use std::time::Duration;
+use uuid::Uuid;
 
 use crate::config::OAuthProvider;
 
@@ -7,13 +8,21 @@ use crate::config::OAuthProvider;
 pub struct OAuthState {
     pub pkce_verifier: String,
     pub provider: OAuthProvider,
+    pub user_id: Uuid,
 }
 
 pub struct OAuthSessionManager {
     cache: Cache<String, OAuthState>,
 }
 
+impl Default for OAuthSessionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl OAuthSessionManager {
+    #[must_use]
     pub fn new() -> Self {
         let cache = Cache::builder()
             .time_to_live(Duration::from_secs(600)) // 10 minutes TTL
@@ -27,6 +36,7 @@ impl OAuthSessionManager {
         self.cache.insert(csrf_token, state);
     }
 
+    #[must_use]
     pub fn consume(&self, csrf_token: &str) -> Option<OAuthState> {
         self.cache.remove(csrf_token)
     }

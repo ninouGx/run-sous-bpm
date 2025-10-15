@@ -21,7 +21,6 @@ use tower_sessions::{
     cookie::{SameSite, time},
 };
 use tracing::{Level, info};
-use tracing_subscriber;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -73,7 +72,7 @@ async fn main() -> anyhow::Result<()> {
         .fallback(handler_404);
 
     let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
-    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port)).await?;
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await?;
 
     info!("Run Sous BPM API server starting on port {}", port);
     info!("Available at:");

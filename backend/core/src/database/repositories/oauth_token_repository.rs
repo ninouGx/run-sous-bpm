@@ -7,6 +7,11 @@ use uuid::Uuid;
 use crate::config::OAuthProvider;
 use crate::database::oauth_token;
 
+/// Creates a new OAuth token for a user and provider
+///
+/// # Errors
+///
+/// Returns an error if database insert fails
 pub async fn create_oauth_token(
     db: &DatabaseConnection,
     user_id: Uuid,
@@ -29,6 +34,11 @@ pub async fn create_oauth_token(
     new_token.insert(db).await
 }
 
+/// Retrieves an OAuth token for a user and provider
+///
+/// # Errors
+///
+/// Returns an error if database query fails
 pub async fn get_oauth_token_by_provider(
     db: &DatabaseConnection,
     user_id: Uuid,
@@ -41,6 +51,11 @@ pub async fn get_oauth_token_by_provider(
         .await
 }
 
+/// Creates or updates an OAuth token for a user and provider
+///
+/// # Errors
+///
+/// Returns an error if database operation fails
 pub async fn upsert_oauth_token(
     db: &DatabaseConnection,
     user_id: Uuid,
@@ -77,6 +92,13 @@ pub async fn upsert_oauth_token(
     }
 }
 
+/// Deletes an OAuth token for a user and provider
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Database query fails
+/// - Token not found
 pub async fn delete_oauth_token(
     db: &DatabaseConnection,
     user_id: Uuid,

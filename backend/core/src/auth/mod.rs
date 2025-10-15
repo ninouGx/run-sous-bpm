@@ -19,7 +19,6 @@ impl AuthUser for user::Model {
     fn session_auth_hash(&self) -> &[u8] {
         self.password_hash
             .as_ref()
-            .map(|h| h.as_bytes())
-            .unwrap_or(&[])
+            .map_or(&[], std::string::String::as_bytes)
     }
 }

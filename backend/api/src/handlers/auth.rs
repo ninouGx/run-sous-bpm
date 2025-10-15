@@ -1,7 +1,7 @@
 use axum::{Extension, Json, http::StatusCode};
 use axum_login::AuthSession;
 use run_sous_bpm_core::{
-    auth::{self, AuthBackend, Credentials, hash_password},
+    auth::{AuthBackend, Credentials, hash_password},
     database::{create_user, get_user_by_email},
 };
 use sea_orm::DatabaseConnection;
@@ -47,16 +47,13 @@ pub async fn register_user(
         }
     }
 
-    let hash = match hash_password(&payload.password) {
-        Ok(h) => h,
-        Err(_) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({
-                    "error": "Password hashing failed"
-                })),
-            );
-        }
+    let Ok(hash) = hash_password(&payload.password) else {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({
+                "error": "Password hashing failed"
+            })),
+        );
     };
     match create_user(&db_connection, payload.email, hash).await {
         Ok(user) => (
@@ -130,7 +127,7 @@ pub async fn login_user(
 }
 
 pub async fn logout_user(mut auth: AuthSession<AuthBackend>) -> (StatusCode, Json<Value>) {
-    let _ = auth.logout();
+    auth.logout().await.ok();
     (
         StatusCode::OK,
         Json(json!({

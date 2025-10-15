@@ -6,6 +6,11 @@ use uuid::Uuid;
 
 use crate::database::user;
 
+/// Creates a new user with email and password hash
+///
+/// # Errors
+///
+/// Returns an error if database insert fails
 pub async fn create_user(
     db: &DatabaseConnection,
     email: String,
@@ -20,6 +25,11 @@ pub async fn create_user(
     new_user.insert(db).await
 }
 
+/// Retrieves a user by email address
+///
+/// # Errors
+///
+/// Returns an error if database query fails
 pub async fn get_user_by_email(
     db: &DatabaseConnection,
     email: String,
@@ -30,6 +40,11 @@ pub async fn get_user_by_email(
         .await
 }
 
+/// Retrieves a user by ID
+///
+/// # Errors
+///
+/// Returns an error if database query fails
 pub async fn get_user_by_id(
     db: &DatabaseConnection,
     id: Uuid,
@@ -40,6 +55,14 @@ pub async fn get_user_by_id(
         .await
 }
 
+/// Updates a user's email address with uniqueness validation
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Database query fails
+/// - User not found
+/// - New email is already in use by another user
 pub async fn update_user_email(
     db: &DatabaseConnection,
     id: Uuid,
@@ -62,6 +85,13 @@ pub async fn update_user_email(
     }
 }
 
+/// Deletes a user by ID
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Database query fails
+/// - User not found
 pub async fn delete_user(db: &DatabaseConnection, id: Uuid) -> Result<(), DbErr> {
     let user = get_user_by_id(db, id).await?;
 
