@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use axum::{
-    Extension,
-    extract::{Path, Query},
+    extract::{Path, Query, State},
     http::StatusCode,
     response::Json,
 };
@@ -10,14 +9,15 @@ use axum_login::AuthSession;
 use run_sous_bpm_core::{
     auth::AuthBackend,
     config::OAuthProvider,
-    services::{OAuthSessionManager, handle_oauth_callback, oauth::start_oauth_flow},
+    services::{handle_oauth_callback, oauth::start_oauth_flow},
 };
-use sea_orm::DatabaseConnection;
 use serde_json::{Value, json};
+
+use crate::AppState;
 
 pub async fn oauth_callback(
     Path(provider): Path<String>,
-    Extension(session_manager): Extension<Arc<OAuthSessionManager>>,
+    State(app_state): State<Arc<AppState>>,
     auth_session: AuthSession<AuthBackend>,
 ) -> (StatusCode, Json<Value>) {
     let Some(user) = auth_session.user else {
@@ -32,7 +32,7 @@ pub async fn oauth_callback(
 
     match provider.parse::<OAuthProvider>() {
         Ok(provider) => {
-            let auth_url = start_oauth_flow(provider, &session_manager, user.id);
+            let auth_url = start_oauth_flow(provider, &app_state.oauth_session_store, user.id);
             (
                 StatusCode::OK,
                 Json(json!({
@@ -57,16 +57,15 @@ pub struct OAuthCallbackParams {
 }
 
 pub async fn oauth_process_callback(
+    State(app_state): State<AppState>,
     params: Query<OAuthCallbackParams>,
-    Extension(session_manager): Extension<Arc<OAuthSessionManager>>,
-    Extension(db_connection): Extension<DatabaseConnection>,
 ) -> (StatusCode, Json<Value>) {
     let (code, state) = (params.code.clone(), params.state.clone());
     match handle_oauth_callback(
         code.clone(),
         state.clone(),
-        &session_manager,
-        &db_connection,
+        &app_state.oauth_session_store,
+        &app_state.db_connection,
     )
     .await
     {

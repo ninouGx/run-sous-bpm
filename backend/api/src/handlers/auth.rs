@@ -1,15 +1,16 @@
-use axum::{Extension, Json, http::StatusCode};
+use axum::{Json, extract::State, http::StatusCode};
 use axum_login::AuthSession;
 use run_sous_bpm_core::{
     auth::{AuthBackend, Credentials, hash_password},
     database::{create_user, get_user_by_email},
 };
-use sea_orm::DatabaseConnection;
 use serde_json::{Value, json};
 use validator::Validate;
 
+use crate::AppState;
+
 pub async fn register_user(
-    Extension(db_connection): Extension<DatabaseConnection>,
+    State(state): State<AppState>,
     Json(payload): Json<Credentials>,
 ) -> (StatusCode, Json<Value>) {
     if let Err(e) = payload.validate() {
@@ -23,7 +24,7 @@ pub async fn register_user(
     }
 
     // Check if email already exists
-    match get_user_by_email(&db_connection, payload.email.clone()).await {
+    match get_user_by_email(&state.db_connection, payload.email.clone()).await {
         Ok(Some(_)) => {
             return (
                 StatusCode::CONFLICT,
@@ -55,7 +56,7 @@ pub async fn register_user(
             })),
         );
     };
-    match create_user(&db_connection, payload.email, hash).await {
+    match create_user(&state.db_connection, payload.email, hash).await {
         Ok(user) => (
             StatusCode::CREATED,
             Json(json!({
