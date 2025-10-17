@@ -2,5 +2,7 @@
 
 pub mod prelude;
 
+pub mod activity;
+pub mod activity_stream;
 pub mod oauth_token;
 pub mod user;
