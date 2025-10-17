@@ -1,7 +1,5 @@
-/*pub mod user;
-pub mod workout;
-pub mod music;
+pub mod activity;
+pub mod activity_stream;
 
-pub use user::*;
-pub use workout::*;
-pub use music::*;*/
+pub use activity::*;
+pub use activity_stream::*;
