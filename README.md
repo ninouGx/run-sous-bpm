@@ -120,30 +120,43 @@ sea-orm-cli generate entity -o core/src/database/entities
 ```
 
 The TimescaleDB database includes:
-- **Hypertables**: Optimized for GPS coordinates and music events
-- **Users & OAuth tokens**: Spotify and Strava authentication
-- **Workout routes**: GPS data from Strava activities
-- **Music timeline**: Spotify listening history with timestamps
-- **Synchronized sessions**: Correlated music and workout data for map visualization
+- **Current Tables**: `users`, `oauth_tokens`, `activities`, `activity_streams`
+- **Hypertables**: Ready for time-series optimization (activity_streams)
+- **Users & OAuth tokens**: Spotify and Strava authentication (Strava complete)
+- **Workout routes**: GPS data from Strava activities with full sync capability
+- **Music timeline**: Spotify listening history with timestamps (planned)
+- **Synchronized sessions**: Correlated music and workout data for map visualization (planned)
 
 ### API Integration
 
-- **Strava**: Workout GPS routes and activity data
-- **Spotify**: Music listening history with timestamps
-- **Data Synchronization**: Match music timestamps with GPS coordinates
+- **Strava** (Implemented):
+  - OAuth2 with PKCE flow
+  - Activity sync with automatic pagination
+  - Stream data sync (GPS, heart rate, cadence, power, temperature)
+  - Automatic token refresh on expiration
+  - Endpoints: `/api/strava/activities/*`
+- **Spotify** (Planned): Music listening history with timestamps
+- **Data Synchronization** (Planned): Match music timestamps with GPS coordinates
 - **Rate limiting**: Circuit breakers and backoff strategies
 - **Token management**: Secure storage with refresh rotation
 
-## Key Features (Planned)
+## Key Features
 
+**Implemented:**
+- [x] Strava OAuth integration with PKCE flow
+- [x] Strava API client for activity and stream data
+- [x] Activity sync endpoints with automatic token refresh
+- [x] Database repositories for activities and time-series sensor data
+- [x] Activity query endpoints with pagination support
+
+**Planned:**
 - [ ] Spotify OAuth integration for music history
-- [ ] Strava OAuth integration for workout data
-- [ ] Interactive maps displaying workout routes
+- [ ] Interactive maps displaying workout routes (Leaflet/Mapbox)
 - [ ] Music timeline overlay on GPS coordinates
 - [ ] Synchronized playback visualization
-- [ ] Future: Real-time workout tracking with live music updates
-- [ ] Future: Statistical analysis of music tempo/energy vs performance
-- [ ] Future: Export capabilities for data analysis
+- [ ] Real-time workout tracking with live music updates
+- [ ] Statistical analysis of music tempo/energy vs performance
+- [ ] Export capabilities for data analysis
 
 ## Security
 
@@ -178,9 +191,14 @@ cd frontend && npm test
 
 The project uses PostgreSQL with TimescaleDB extension:
 
-- **Hypertables**: `workout_metrics` and `music_events` for sensor data
-- **Continuous Aggregates**: Real-time statistics computation
-- **Retention Policies**: 3-month rolling window for raw sensor data
+- **Current Tables**:
+  - `users`: User accounts with password authentication
+  - `oauth_tokens`: Encrypted OAuth tokens for Strava and Spotify
+  - `activities`: Strava workout metadata (distance, duration, elevation, etc.)
+  - `activity_streams`: Time-series sensor data (GPS, heart rate, cadence, power)
+- **Hypertables**: Ready for conversion (activity_streams)
+- **Continuous Aggregates**: Planned for real-time statistics computation
+- **Retention Policies**: Planned 3-month rolling window for raw sensor data
 
 ## License
 
@@ -188,4 +206,12 @@ This project is licensed under the MIT License.
 
 ## Current Status
 
-This repository contains the initial project setup and architectural foundation. The core features are currently in development following the documented structure.
+**Backend**: Strava integration fully implemented with OAuth, API client, database repositories, and REST endpoints. Ready for frontend integration and Spotify implementation.
+
+**Frontend**: Initial SvelteKit setup with TailwindCSS and TanStack Query. UI components and routing in progress.
+
+**Next Steps**:
+1. Implement Spotify OAuth and API integration
+2. Build frontend UI for activity visualization
+3. Add map visualization with Leaflet/Mapbox
+4. Implement music-workout synchronization logic
