@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+run-sous-bpm-integrations = { path = "../integrations" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
@@ -22,3 +23,4 @@ argon2 = { workspace = true }
 rand_core = { workspace = true }
 validator = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
+async-trait = { workspace = true }
