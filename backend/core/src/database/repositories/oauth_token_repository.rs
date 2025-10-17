@@ -1,10 +1,12 @@
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr, EntityTrait,
-    QueryFilter, prelude::DateTimeWithTimeZone,
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr,
+    prelude::DateTimeWithTimeZone,
 };
+use sea_orm::{EntityTrait, QueryFilter};
 use uuid::Uuid;
 
 use crate::config::OAuthProvider;
+use crate::database::entities::prelude::OauthToken;
 use crate::database::oauth_token;
 
 /// Creates a new OAuth token for a user and provider
@@ -44,7 +46,7 @@ pub async fn get_oauth_token_by_provider(
     user_id: Uuid,
     provider: OAuthProvider,
 ) -> Result<Option<oauth_token::Model>, DbErr> {
-    oauth_token::Entity::find()
+    OauthToken::find()
         .filter(oauth_token::Column::UserId.eq(user_id))
         .filter(oauth_token::Column::Provider.eq(provider.to_string()))
         .one(db)
