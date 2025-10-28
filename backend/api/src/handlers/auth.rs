@@ -87,7 +87,6 @@ pub async fn login_user(
             })),
         );
     }
-
     let user = auth.authenticate(payload).await;
     match user {
         Ok(Some(user)) => {
