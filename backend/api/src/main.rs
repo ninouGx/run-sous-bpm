@@ -28,8 +28,8 @@ use tower_sessions::{
 use tracing::{Level, info};
 
 use crate::handlers::{
-    get_strava_activities, get_strava_activity_streams, sync_strava_activities,
-    sync_strava_activity_streams,
+    get_strava_activities, get_strava_activity_streams, sync_all_strava_activity_streams,
+    sync_strava_activities, sync_strava_activity_streams,
 };
 
 #[derive(Clone)]
@@ -107,6 +107,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/strava/activities/{id}/streams/sync",
             post(sync_strava_activity_streams),
+        )
+        .route(
+            "/api/strava/activities/streams/sync",
+            post(sync_all_strava_activity_streams),
         )
         .route_layer(login_required!(AuthBackend))
         .with_state(state.clone().into());

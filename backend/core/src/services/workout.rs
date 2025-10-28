@@ -59,7 +59,7 @@ pub async fn sync_strava_activity_streams(
     db_connection: &DatabaseConnection,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let token = get_valid_token(db_connection, user_id, OAuthProvider::Strava).await?;
-    let params = StravaActivityStreamsParams::new(&[
+    let keys = &[
         "time",
         "distance",
         "latlng",
@@ -69,7 +69,8 @@ pub async fn sync_strava_activity_streams(
         "watts",
         "velocity_smooth",
         "temperature",
-    ]);
+    ];
+    let params = StravaActivityStreamsParams::new(keys);
     let streams = strava_client
         .get_activity_streams(&token, external_id, params)
         .await?;
@@ -92,5 +93,42 @@ pub async fn sync_strava_activity_streams(
         points = count,
         "Successfully synced activity streams"
     );
+    Ok(())
+}
+
+/// Syncs activity streams for all activities of a user
+/// # Errors
+///
+/// Returns an error if:
+/// - OAuth token retrieval fails
+/// - Strava API request fails
+/// - Stream validation fails
+/// - Database insertion fails
+pub async fn sync_all_strava_activity_streams(
+    user_id: uuid::Uuid,
+    strava_client: &StravaApiClient,
+    db_connection: &DatabaseConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let activities = activity_repository::get_activities_by_user(db_connection, user_id).await?;
+
+    for activity in activities {
+        if let Err(e) = sync_strava_activity_streams(
+            user_id,
+            activity.external_id,
+            strava_client,
+            db_connection,
+        )
+        .await
+        {
+            info!(
+                user_id = %user_id,
+                activity_id = %activity.id,
+                external_id = activity.external_id,
+                error = %e,
+                "Failed to sync activity streams"
+            );
+        }
+    }
+
     Ok(())
 }

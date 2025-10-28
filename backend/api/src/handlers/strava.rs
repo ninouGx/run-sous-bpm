@@ -119,6 +119,39 @@ pub async fn sync_strava_activity_streams(
     }
 }
 
+pub async fn sync_all_strava_activity_streams(
+    State(state): State<Arc<AppState>>,
+    auth_session: AuthSession<AuthBackend>,
+) -> (StatusCode, Json<Value>) {
+    let Some(user) = auth_session.user else {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": "Unauthorized",
+                "message": "You must be logged in to access this resource"
+            })),
+        );
+    };
+    let user_id = user.id;
+
+    match run_sous_bpm_core::services::sync_all_strava_activity_streams(
+        user_id,
+        &state.strava_client,
+        &state.db_connection,
+    )
+    .await
+    {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(json!({"message": "Successfully synced all activity streams"})),
+        ),
+        Err(err) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": format!("Failed to sync all Strava activity streams: {}", err)})),
+        ),
+    }
+}
+
 /// Retrieves user's Strava activities directly from the Strava API
 ///
 /// Fetches activities from Strava API without storing them. Useful for browsing
