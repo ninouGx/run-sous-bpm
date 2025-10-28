@@ -5,7 +5,7 @@ resolver = "3"
 [workspace.dependencies]
 axum-login = { version = "0.18.0" }
 axum = "0.8.6"
-tokio = { version = "1.47.1", features = ["full"] }
+tokio = { version = "1.48.0", features = ["full"] }
 sqlx = { version = "0.8.6", features = ["postgres", "uuid", "chrono"] }
 sea-orm = { version = "1.1.17", features = [
     "sqlx-postgres",
@@ -35,4 +35,5 @@ argon2 = { version = "0.5.3", features = ["std"] }
 rand_core = { version = "0.9.3", features = ["std"] }
 tower-sessions = { version = "0.14.0", features = ["memory-store"] }
 validator = "0.20.0"
-async-trait = "0.1.85"
+async-trait = "0.1.89"
+async_lastfm = { git = " https://github.com/TomPlanche/last_fm_fetch.git" }

@@ -17,3 +17,4 @@ sea-orm = { workspace = true }
 async-trait = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+async_lastfm = { workspace = true }
