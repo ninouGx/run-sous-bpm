@@ -2,5 +2,7 @@
 
 pub use super::activity::Entity as Activity;
 pub use super::activity_stream::Entity as ActivityStream;
+pub use super::listen::Entity as Listen;
 pub use super::oauth_token::Entity as OauthToken;
+pub use super::track::Entity as Track;
 pub use super::user::Entity as User;

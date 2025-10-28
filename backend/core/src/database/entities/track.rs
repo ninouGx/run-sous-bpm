@@ -4,43 +4,37 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "user")]
+#[sea_orm(table_name = "track")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    #[sea_orm(column_type = "Text", unique)]
-    pub email: String,
+    #[sea_orm(column_type = "Text")]
+    pub artist_name: String,
+    #[sea_orm(column_type = "Text")]
+    pub track_name: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub album_name: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub artist_mbid: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub track_mbid: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub album_mbid: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub lastfm_url: Option<String>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub password_hash: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::activity::Entity")]
-    Activity,
     #[sea_orm(has_many = "super::listen::Entity")]
     Listen,
-    #[sea_orm(has_many = "super::oauth_token::Entity")]
-    OauthToken,
-}
-
-impl Related<super::activity::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Activity.def()
-    }
 }
 
 impl Related<super::listen::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Listen.def()
-    }
-}
-
-impl Related<super::oauth_token::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::OauthToken.def()
     }
 }
 

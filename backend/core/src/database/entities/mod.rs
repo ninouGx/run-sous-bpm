@@ -4,5 +4,7 @@ pub mod prelude;
 
 pub mod activity;
 pub mod activity_stream;
+pub mod listen;
 pub mod oauth_token;
+pub mod track;
 pub mod user;

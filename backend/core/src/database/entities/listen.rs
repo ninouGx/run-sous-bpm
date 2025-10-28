@@ -4,25 +4,26 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Eq, Serialize, Deserialize)]
-#[sea_orm(table_name = "oauth_token")]
+#[sea_orm(table_name = "listen")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub user_id: Uuid,
-    #[sea_orm(column_type = "Text")]
-    pub provider: String,
-    #[sea_orm(column_type = "Text")]
-    pub access_token: String,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub refresh_token: Option<String>,
-    pub expires_at: Option<DateTimeWithTimeZone>,
-    pub scopes: Option<Vec<String>>,
+    pub track_id: Uuid,
+    pub played_at: DateTimeWithTimeZone,
     pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::track::Entity",
+        from = "Column::TrackId",
+        to = "super::track::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Track,
     #[sea_orm(
         belongs_to = "super::user::Entity",
         from = "Column::UserId",
@@ -31,6 +32,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     User,
+}
+
+impl Related<super::track::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Track.def()
+    }
 }
 
 impl Related<super::user::Entity> for Entity {
