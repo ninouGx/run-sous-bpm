@@ -1,4 +1,4 @@
-use async_lastfm::types::RecentTrack;
+use lastfm_client::types::RecentTrack;
 use uuid::Uuid;
 
 use crate::database::track;

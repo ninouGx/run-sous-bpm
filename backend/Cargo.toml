@@ -36,4 +36,4 @@ rand_core = { version = "0.9.3", features = ["std"] }
 tower-sessions = { version = "0.14.0", features = ["memory-store"] }
 validator = "0.20.0"
 async-trait = "0.1.89"
-async_lastfm = { git = "https://github.com/TomPlanche/last_fm_fetch.git", branch = "v1" }
+lastfm-client = "2.0"

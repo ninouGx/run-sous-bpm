@@ -24,4 +24,4 @@ rand_core = { workspace = true }
 validator = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
 async-trait = { workspace = true }
-async_lastfm = { workspace = true }
+lastfm-client = { workspace = true }

@@ -122,9 +122,9 @@ sea-orm-cli generate entity -o core/src/database/entities
 ```
 
 The TimescaleDB database includes:
-- **Current Tables**: `users`, `oauth_tokens`, `activities`, `activity_streams`, `tracks`, `listens`
+- **Current Tables**: `users` (with lastfm_username), `oauth_tokens`, `activities`, `activity_streams`, `tracks`, `listens`
 - **Hypertables**: Ready for time-series optimization (activity_streams)
-- **Users & OAuth tokens**: Spotify and Strava authentication (Strava complete)
+- **Users & OAuth tokens**: Spotify and Strava authentication (Strava complete), Last.fm username storage
 - **Workout routes**: GPS data from Strava activities with full sync capability
 - **Music data**: Last.fm listening history with MBIDs (MusicBrainz IDs) for future enrichment
 - **Music timeline**: Spotify-enriched metadata with audio features (planned)
@@ -143,7 +143,10 @@ The TimescaleDB database includes:
   - MBID capture (artist, track, album MusicBrainz IDs)
   - Track deduplication and listen recording
   - Integration with activity sync workflow
-- **Spotify** (Planned): Music enrichment with audio features via MBID→ISRC translation
+- **Spotify** (Foundation Implemented):
+  - Basic API client with recently played endpoint
+  - Complete response DTOs for Spotify API
+  - Ready for music enrichment with audio features via MBID→ISRC translation
 - **MusicBrainz** (Planned): MBID to ISRC translation for Spotify search
 - **Data Synchronization** (Planned): Match music timestamps with GPS coordinates
 - **Rate limiting**: Circuit breakers and backoff strategies
@@ -158,8 +161,13 @@ The TimescaleDB database includes:
 - [x] Database repositories for activities and time-series sensor data
 - [x] Activity query endpoints with pagination support
 - [x] Last.fm integration with listening history sync
+- [x] Last.fm username storage in user profile
 - [x] MBID capture (MusicBrainz IDs) for future Spotify enrichment
 - [x] Track and listen recording with deduplication
+- [x] Music analytics endpoint: `GET /api/activities/{id}/music`
+- [x] Automatic Last.fm sync when activity music data is requested
+- [x] Activity-music correlation with joined queries
+- [x] Spotify API client foundation with recently played endpoint
 
 **Planned:**
 - [ ] **Music Enrichment Pipeline** (see `docs/music-enrichment-architecture.md`):
@@ -209,7 +217,7 @@ cd frontend && npm test
 The project uses PostgreSQL with TimescaleDB extension:
 
 - **Current Tables**:
-  - `users`: User accounts with password authentication
+  - `users`: User accounts with password authentication and Last.fm username
   - `oauth_tokens`: Encrypted OAuth tokens for Strava and Spotify
   - `activities`: Strava workout metadata (distance, duration, elevation, etc.)
   - `activity_streams`: Time-series sensor data (GPS, heart rate, cadence, power)
@@ -229,6 +237,8 @@ This project is licensed under the MIT License.
 **Backend**:
 - Strava integration fully implemented with OAuth, API client, database repositories, and REST endpoints
 - Last.fm integration complete with listening history sync and MBID capture
+- Music analytics service with activity-music correlation endpoint
+- Spotify API client foundation with basic endpoints
 - Ready for frontend integration and music enrichment pipeline
 
 **Frontend**: Initial SvelteKit setup with TailwindCSS and TanStack Query. UI components and routing in progress.

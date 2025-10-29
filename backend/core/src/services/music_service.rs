@@ -4,8 +4,8 @@ use sea_orm::DatabaseConnection;
 use tracing::info;
 
 use crate::{
-    database::{batch_create_listens, listen, upsert_track},
-    models::{CreateListenDto, CreateTrackDto},
+    database::{ batch_create_listens, listen, upsert_track },
+    models::{ CreateListenDto, CreateTrackDto },
 };
 
 /// Syncs Last.fm listening history for a specific time range (e.g., during an activity)
@@ -35,15 +35,15 @@ pub async fn sync_lastfm_for_time_range(
     lastfm_username: &str,
     start_timestamp: i64,
     end_timestamp: i64,
-    db_connection: &DatabaseConnection,
+    db_connection: &DatabaseConnection
 ) -> Result<Vec<listen::Model>, Box<dyn std::error::Error>> {
-    // Create Last.fm client for this user
-    let lastfm_client = LastFmClient::new(lastfm_username);
+    let lastfm_client = LastFmClient::new();
 
-    // Fetch tracks from Last.fm for the time range
-    let lastfm_tracks = lastfm_client
-        .get_tracks_in_time_range(start_timestamp, end_timestamp)
-        .await?;
+    let lastfm_tracks = lastfm_client.get_tracks_in_time_range(
+        lastfm_username,
+        start_timestamp,
+        end_timestamp
+    ).await?;
 
     info!(
         user_id = %user_id,
@@ -59,11 +59,9 @@ pub async fn sync_lastfm_for_time_range(
         return Ok(Vec::new());
     }
 
-    // Process each track: upsert track metadata, then create listen record
     let mut listen_models = Vec::new();
 
     for lastfm_track in lastfm_tracks {
-        // Skip tracks without a timestamp (shouldn't happen after filtering, but be safe)
         let Some(date) = &lastfm_track.date else {
             continue;
         };
@@ -72,14 +70,11 @@ pub async fn sync_lastfm_for_time_range(
         let track_dto = CreateTrackDto::from_lastfm_track(&lastfm_track);
         let saved_track = upsert_track(db_connection, track_dto).await?;
 
-        // Create listen DTO
         let listen_dto = CreateListenDto::new(user_id, saved_track.id, date.uts);
 
-        // Convert to active model for batch insertion
         listen_models.push(listen_dto.into_active_model());
     }
 
-    // Batch insert all listens
     let insert_count = listen_models.len();
     batch_create_listens(db_connection, listen_models).await?;
 
@@ -89,8 +84,6 @@ pub async fn sync_lastfm_for_time_range(
         "Successfully synced Last.fm listening history"
     );
 
-    // Return the saved listens by querying the database
-    // Note: We use the time range query instead of returning from insert
     let saved_listens = crate::database::get_listens_by_user_time_range(
         db_connection,
         user_id,
@@ -103,9 +96,8 @@ pub async fn sync_lastfm_for_time_range(
             .timestamp_opt(end_timestamp, 0)
             .single()
             .expect("Invalid end timestamp")
-            .fixed_offset(),
-    )
-    .await?;
+            .fixed_offset()
+    ).await?;
 
     Ok(saved_listens)
 }
