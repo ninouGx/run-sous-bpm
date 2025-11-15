@@ -85,6 +85,30 @@ pub async fn update_user_email(
     }
 }
 
+/// Updates a user's lastfm username
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - Database query fails
+/// - User not found
+pub async fn update_user_lastfm_username(
+    db: &DatabaseConnection,
+    id: Uuid,
+    new_lastfm_username: String,
+) -> Result<user::Model, DbErr> {
+    let user = get_user_by_id(db, id).await?;
+
+    match user {
+        Some(u) => {
+            let mut active_model: user::ActiveModel = u.into();
+            active_model.lastfm_username = Set(Some(new_lastfm_username));
+            active_model.update(db).await
+        }
+        None => Err(DbErr::RecordNotFound("User not found".into())),
+    }
+}
+
 /// Deletes a user by ID
 ///
 /// # Errors
