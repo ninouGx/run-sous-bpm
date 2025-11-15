@@ -1,11 +1,12 @@
 use chrono::TimeZone;
+use lastfm_client::types::RecentTrack;
 use run_sous_bpm_integrations::lastfm::LastFmClient;
 use sea_orm::DatabaseConnection;
 use tracing::info;
 
 use crate::{
-    database::{ batch_create_listens, listen, upsert_track },
-    models::{ CreateListenDto, CreateTrackDto },
+    database::{batch_create_listens, listen, upsert_track},
+    models::{CreateListenDto, CreateTrackDto},
 };
 
 /// Syncs Last.fm listening history for a specific time range (e.g., during an activity)
@@ -35,15 +36,13 @@ pub async fn sync_lastfm_for_time_range(
     lastfm_username: &str,
     start_timestamp: i64,
     end_timestamp: i64,
-    db_connection: &DatabaseConnection
+    db_connection: &DatabaseConnection,
 ) -> Result<Vec<listen::Model>, Box<dyn std::error::Error>> {
     let lastfm_client = LastFmClient::new();
 
-    let lastfm_tracks = lastfm_client.get_tracks_in_time_range(
-        lastfm_username,
-        start_timestamp,
-        end_timestamp
-    ).await?;
+    let lastfm_tracks = lastfm_client
+        .get_tracks_in_time_range(lastfm_username, start_timestamp, end_timestamp)
+        .await?;
 
     info!(
         user_id = %user_id,
@@ -96,8 +95,47 @@ pub async fn sync_lastfm_for_time_range(
             .timestamp_opt(end_timestamp, 0)
             .single()
             .expect("Invalid end timestamp")
-            .fixed_offset()
-    ).await?;
+            .fixed_offset(),
+    )
+    .await?;
 
     Ok(saved_listens)
+}
+
+/// Fetches Last.fm tracks for a time range WITHOUT saving to database
+///
+/// This is a debug/investigation function to understand Last.fm API behavior
+/// and timestamp boundary handling.
+///
+/// # Arguments
+/// * `lastfm_username` - Last.fm username to fetch data for
+/// * `start_timestamp` - Unix timestamp (seconds) for start of range
+/// * `end_timestamp` - Unix timestamp (seconds) for end of range
+///
+/// # Errors
+///
+/// Returns an error if Last.fm API request fails
+///
+/// # Returns
+/// Vector of raw `RecentTrack` objects from Last.fm API
+pub async fn get_lastfm_tracks_raw(
+    lastfm_username: &str,
+    start_timestamp: i64,
+    end_timestamp: i64,
+) -> Result<Vec<RecentTrack>, Box<dyn std::error::Error>> {
+    let lastfm_client = LastFmClient::new();
+
+    let lastfm_tracks = lastfm_client
+        .get_tracks_in_time_range(lastfm_username, start_timestamp, end_timestamp)
+        .await?;
+
+    info!(
+        lastfm_username = lastfm_username,
+        start_timestamp = start_timestamp,
+        end_timestamp = end_timestamp,
+        tracks_fetched = lastfm_tracks.len(),
+        "Fetched raw Last.fm tracks (debug mode)"
+    );
+
+    Ok(lastfm_tracks)
 }
