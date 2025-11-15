@@ -1,12 +1,23 @@
-use serde::{ Deserialize, Serialize };
+use serde::Serialize;
 
-use crate::{ common::{ IntegrationClient, IntegrationError } };
+use crate::common::{IntegrationClient, IntegrationError};
+use crate::spotify::SpotifyRecentlyPlayedResponse;
 
+/// Query parameters for Spotify recently played endpoint
+///
+/// This will be used in the future music enrichment pipeline
+#[allow(dead_code)]
+#[derive(Serialize)]
 pub struct SpotifyRecentlyPlayedParams {
     pub after: Option<u64>,
     pub before: Option<u64>,
 }
 
+/// Spotify API client for music enrichment
+///
+/// Foundation for future Spotify integration to enrich Last.fm data
+/// with audio features (tempo, energy, danceability, etc.)
+#[allow(dead_code)]
 pub struct SpotifyApiClient {
     pub integration_client: IntegrationClient,
     pub base_url: String,
@@ -30,7 +41,7 @@ impl SpotifyApiClient {
         access_token: &str,
         param: SpotifyRecentlyPlayedParams
     ) -> Result<SpotifyRecentlyPlayedResponse, IntegrationError> {
-        let mut url = format!("{self.base_url}/me/player/recently-played");
+        let url = format!("{}/me/player/recently-played", self.base_url);
 
         let response = self.integration_client.get_with_query(&url, access_token, &param).await?;
         let spotify_response: SpotifyRecentlyPlayedResponse = response
