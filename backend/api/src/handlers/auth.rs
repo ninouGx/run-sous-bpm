@@ -1,8 +1,12 @@
+use std::sync::Arc;
+
 use axum::{Json, extract::State, http::StatusCode};
 use axum_login::AuthSession;
 use run_sous_bpm_core::{
     auth::{AuthBackend, Credentials, hash_password},
+    config::OAuthProvider,
     database::{create_user, get_user_by_email},
+    services::is_oauth_provider_connected,
 };
 use serde_json::{Value, json};
 use validator::Validate;
@@ -134,4 +138,50 @@ pub async fn logout_user(mut auth: AuthSession<AuthBackend>) -> (StatusCode, Jso
             "message": "Logout successful"
         })),
     )
+}
+
+pub async fn get_current_user(
+    State(state): State<Arc<AppState>>,
+    auth_session: AuthSession<AuthBackend>,
+) -> (StatusCode, Json<Value>) {
+    match auth_session.user {
+        Some(user) => {
+            let (is_connected_strava, is_connected_spotify) = {
+                (
+                    is_oauth_provider_connected(
+                        &state.db_connection,
+                        user.id,
+                        OAuthProvider::Strava,
+                    )
+                    .await
+                    .unwrap_or(false),
+                    is_oauth_provider_connected(
+                        &state.db_connection,
+                        user.id,
+                        OAuthProvider::Spotify,
+                    )
+                    .await
+                    .unwrap_or(false),
+                )
+            };
+            (
+                StatusCode::OK,
+                Json(json!({
+                    "id": user.id,
+                    "email": user.email,
+                    "lastfm_username": user.lastfm_username,
+                    "oauth_connections": {
+                        "strava": is_connected_strava,
+                        "spotify": is_connected_spotify
+                    }
+                })),
+            )
+        }
+        None => (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({
+                "error": "Not authenticated"
+            })),
+        ),
+    }
 }
