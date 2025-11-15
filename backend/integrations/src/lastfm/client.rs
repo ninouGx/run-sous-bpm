@@ -29,6 +29,17 @@ impl LastFmClient {
         }
     }
 
+    /// Validates if a Last.fm username exists
+    ///
+    /// # Arguments
+    /// * `username` - Last.fm username to validate
+    ///
+    /// # Returns
+    /// `true` if the username exists, `false` otherwise
+    pub async fn is_username_valid(&self, username: &str) -> bool {
+        self.client.user_exists(username).await.unwrap_or(false)
+    }
+
     /// Fetches tracks played within a specific time range
     ///
     /// # Arguments
