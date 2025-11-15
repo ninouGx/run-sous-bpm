@@ -1,7 +1,7 @@
 [package]
 name = "run-sous-bpm-api"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 run-sous-bpm-core = { path = "../core" }
@@ -22,3 +22,4 @@ sea-orm = { workspace = true }
 axum-login = { workspace = true }
 tower-sessions = { workspace = true }
 validator = { workspace = true, features = ["derive"] }
+urlencoding = { workspace = true }
