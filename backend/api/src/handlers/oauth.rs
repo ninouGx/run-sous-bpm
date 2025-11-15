@@ -3,7 +3,7 @@ use std::sync::Arc;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    response::Json,
+    response::{Json, Redirect},
 };
 use axum_login::AuthSession;
 use run_sous_bpm_core::{
@@ -12,6 +12,7 @@ use run_sous_bpm_core::{
     services::{handle_oauth_callback, oauth::start_oauth_flow},
 };
 use serde_json::{Value, json};
+use tracing::info;
 
 use crate::AppState;
 
@@ -59,7 +60,10 @@ pub struct OAuthCallbackParams {
 pub async fn oauth_process_callback(
     State(app_state): State<AppState>,
     params: Query<OAuthCallbackParams>,
-) -> (StatusCode, Json<Value>) {
+) -> Redirect {
+    let frontend_url =
+        std::env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
+
     let (code, state) = (params.code.clone(), params.state.clone());
     match handle_oauth_callback(
         code.clone(),
@@ -69,17 +73,72 @@ pub async fn oauth_process_callback(
     )
     .await
     {
-        Ok(_token_response) => (
-            StatusCode::OK,
+        Ok((_token_response, provider)) => {
+            let provider_str = provider.to_string().to_lowercase();
+            let redirect_url =
+                format!("{frontend_url}/oauth/callback?status=success&provider={provider_str}");
+            info!(
+                "OAuth callback successful for provider: {provider_str}, redirecting to {redirect_url}"
+            );
+            Redirect::to(&redirect_url)
+        }
+        Err(e) => {
+            let error_string = e.to_string();
+            let error_message = urlencoding::encode(&error_string);
+            let redirect_url =
+                format!("{frontend_url}/oauth/callback?status=error&error={error_message}");
+            info!("OAuth callback failed: {error_string}, redirecting to {redirect_url}");
+            Redirect::to(&redirect_url)
+        }
+    }
+}
+
+pub async fn remove_oauth_provider(
+    State(app_state): State<Arc<AppState>>,
+    auth_session: AuthSession<AuthBackend>,
+    Path(provider): Path<String>,
+) -> (StatusCode, Json<Value>) {
+    let Some(user) = auth_session.user else {
+        return (
+            StatusCode::UNAUTHORIZED,
             Json(json!({
-                "message": "OAuth process completed successfully",
+                "error": "Unauthorized",
+                "message": "You must be logged in to disconnect OAuth providers"
             })),
-        ),
-        Err(e) => (
+        );
+    };
+
+    info!(user_id = %user.id, provider = %provider, "Removing OAuth provider connection");
+
+    match provider.parse::<OAuthProvider>() {
+        Ok(provider) => {
+            match run_sous_bpm_core::database::repositories::delete_oauth_token(
+                &app_state.db_connection,
+                user.id,
+                provider,
+            )
+            .await
+            {
+                Ok(()) => (
+                    StatusCode::OK,
+                    Json(json!({
+                        "message": format!("Successfully disconnected {provider}"),
+                    })),
+                ),
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({
+                        "error": "Failed to disconnect provider",
+                        "message": e.to_string(),
+                    })),
+                ),
+            }
+        }
+        Err(_) => (
             StatusCode::BAD_REQUEST,
             Json(json!({
-                "error": "Failed to process OAuth callback",
-                "message": e.to_string(),
+                "error": "Invalid provider",
+                "message": format!("Provider '{}' is not supported", provider)
             })),
         ),
     }

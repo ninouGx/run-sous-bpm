@@ -86,17 +86,18 @@ pub async fn handle_oauth_callback(
     state: String,
     session_store: &OAuthSessionManager,
     db_connection: &DatabaseConnection,
-) -> Result<BasicTokenResponse, Box<dyn std::error::Error>> {
+) -> Result<(BasicTokenResponse, OAuthProvider), Box<dyn std::error::Error>> {
     info!(
         "Handling OAuth callback with code: {}, state: {}",
         code, state
     );
     let Some(session_state) = session_store.consume(&state) else {
-        println!("Invalid or expired CSRF token");
+        tracing::error!("Invalid or expired CSRF token");
         return Err("Invalid or expired CSRF token".into());
     };
 
-    let client_info = ClientInfo::from_provider(session_state.provider);
+    let provider = session_state.provider;
+    let client_info = ClientInfo::from_provider(provider);
     let oauth_client = build_oauth_client(&client_info);
 
     let http_client = reqwest::ClientBuilder::new()
@@ -116,11 +117,12 @@ pub async fn handle_oauth_callback(
         db_connection,
         // You would typically get the user ID from your session or context.
         session_state.user_id,
-        session_state.provider,
+        provider,
         token_result.access_token().secret().to_string(),
         token_result.refresh_token().map(|r| r.secret().to_string()),
         token_result.expires_in().map(|dur| {
-            let expiry = chrono::Utc::now() + chrono::Duration::from_std(dur).unwrap();
+            let expiry = chrono::Utc::now() + chrono::Duration::from_std(dur)
+                .expect("Token expiry duration out of range");
             expiry.into()
         }),
         Some(
@@ -133,7 +135,7 @@ pub async fn handle_oauth_callback(
     )
     .await?;
 
-    Ok(token_result)
+    Ok((token_result, provider))
 }
 
 /// Gets a valid OAuth access token for a user and provider
@@ -212,7 +214,8 @@ pub async fn refresh_token(
         token_result.access_token().secret().to_string(),
         token_result.refresh_token().map(|r| r.secret().to_string()),
         token_result.expires_in().map(|dur| {
-            let expiry = chrono::Utc::now() + chrono::Duration::from_std(dur).unwrap();
+            let expiry = chrono::Utc::now() + chrono::Duration::from_std(dur)
+                .expect("Token expiry duration out of range");
             expiry.into()
         }),
         Some(
@@ -226,6 +229,23 @@ pub async fn refresh_token(
     .await?;
 
     Ok(token_result.access_token().secret().to_string())
+}
+
+/// Checks if a user has connected an OAuth provider
+///
+/// # Errors
+///
+/// Returns an error if database operation fails
+///
+/// # Returns
+/// True if the user has a token for the provider, false otherwise
+pub async fn is_oauth_provider_connected(
+    db_connection: &DatabaseConnection,
+    user_id: uuid::Uuid,
+    provider: OAuthProvider,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let token = get_oauth_token_by_provider(db_connection, user_id, provider).await?;
+    Ok(token.is_some())
 }
 
 #[cfg(test)]
