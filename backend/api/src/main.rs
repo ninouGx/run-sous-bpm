@@ -1,37 +1,48 @@
 mod handlers;
 mod middleware;
 mod responses;
+mod tracing_config;
 
-use axum::http::{HeaderValue, Method};
-use axum::{
-    Router,
-    middleware::from_fn,
-    routing::{get, patch, post},
-};
-use axum_login::{AuthManagerLayerBuilder, login_required, tower_sessions::MemoryStore};
+use axum::extract::MatchedPath;
+use axum::http::{ HeaderValue, Method, Request, Response };
+use axum::{ Router, middleware::from_fn, routing::{ get, patch, post } };
+use axum_login::{ AuthManagerLayerBuilder, login_required, tower_sessions::MemoryStore };
 use handlers::{
-    get_activity_music, get_current_user, get_strava_activities, get_strava_activity_streams,
-    handler_404, health, login_user, logout_user, oauth_callback, oauth_process_callback,
-    register_user, root, sync_all_strava_activity_streams, sync_strava_activities,
+    get_activity_music,
+    get_current_user,
+    get_strava_activities,
+    get_strava_activity_streams,
+    handler_404,
+    health,
+    login_user,
+    logout_user,
+    oauth_callback,
+    oauth_process_callback,
+    register_user,
+    root,
+    sync_all_strava_activity_streams,
+    sync_strava_activities,
     sync_strava_activity_streams,
 };
 use run_sous_bpm_core::{
-    auth::AuthBackend, database::establish_db_connection, services::OAuthSessionManager,
+    auth::AuthBackend,
+    database::establish_db_connection,
+    services::OAuthSessionManager,
 };
 use run_sous_bpm_integrations::{
-    common::{AuthenticatedClient, IntegrationClient},
+    common::{ AuthenticatedClient, IntegrationClient },
     strava::StravaApiClient,
 };
 use sea_orm::DatabaseConnection;
 use std::sync::Arc;
+use std::time::Duration;
+use tower_http::classify::ServerErrorsFailureClass;
 use tower_http::cors::CorsLayer;
-use tower_sessions::{
-    Expiry, SessionManagerLayer,
-    cookie::{SameSite, time},
-};
-use tracing::{Level, info};
+use tower_http::trace::TraceLayer;
+use tower_sessions::{ Expiry, SessionManagerLayer, cookie::{ SameSite, time } };
+use tracing::{ info, info_span, Span };
 
-use crate::handlers::{patch_user, remove_oauth_provider};
+use crate::handlers::{ patch_user, remove_oauth_provider };
 
 #[derive(Clone)]
 struct AppState {
@@ -44,25 +55,18 @@ struct AppState {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .with_target(true)
-        .with_line_number(true)
-        .pretty()
-        .init();
+    tracing_config::init_tracing();
 
     let oauth_session_store = Arc::new(OAuthSessionManager::new());
     let db_connection = establish_db_connection().await?;
 
     let http_client = Arc::new(AuthenticatedClient::new());
 
-    let strava_base_url = std::env::var("STRAVA_API_URL")
+    let strava_base_url = std::env
+        ::var("STRAVA_API_URL")
         .unwrap_or_else(|_| "https://www.strava.com/api/v3".to_string());
     let strava_integration_client = IntegrationClient::new(http_client.clone());
-    let strava_client = Arc::new(StravaApiClient::new(
-        strava_integration_client,
-        strava_base_url,
-    ));
+    let strava_client = Arc::new(StravaApiClient::new(strava_integration_client, strava_base_url));
 
     let state = AppState {
         db_connection: db_connection.clone(),
@@ -71,20 +75,30 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let session_store = MemoryStore::default();
+
+    // Session configuration with security best practices
+    // - HttpOnly: prevents JavaScript access to cookies (default in tower_sessions)
+    // - Secure: only send cookie over HTTPS (configurable via COOKIE_SECURE env var)
+    // - SameSite::Strict: only send cookie for same-site requests (prevents CSRF)
+    let cookie_secure = std::env
+        ::var("COOKIE_SECURE")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false); // Default to false for local development
+
     let session_layer = SessionManagerLayer::new(session_store)
         .with_name("run_sous_bpm_session")
-        .with_secure(false)
-        .with_same_site(SameSite::Lax)
+        .with_secure(cookie_secure)
+        .with_same_site(SameSite::Strict) // Changed from Lax to Strict for better security
+        .with_http_only(true) // Explicitly set HttpOnly (prevents XSS attacks)
         .with_expiry(Expiry::OnInactivity(time::Duration::hours(1)));
     let auth_backend = AuthBackend::new(db_connection.clone());
     let auth_layer = AuthManagerLayerBuilder::new(auth_backend, session_layer).build();
 
-    let oauth_callback_route =
-        std::env::var("REDIRECT_ENDPOINT").unwrap_or_else(|_| "/api/oauth/callback".to_string());
+    let oauth_callback_route = std::env
+        ::var("REDIRECT_ENDPOINT")
+        .unwrap_or_else(|_| "/api/oauth/callback".to_string());
 
-    // ====== CONFIGURATION CORS ======
-    let allowed_origin =
-        std::env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
+    let allowed_origin = std::env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
 
     let cors = CorsLayer::new()
         .allow_origin(allowed_origin.parse::<HeaderValue>().expect("Invalid CORS origin"))
@@ -97,11 +111,7 @@ async fn main() -> anyhow::Result<()> {
             Method::DELETE,
             Method::OPTIONS,
         ])
-        .allow_headers([
-            axum::http::header::CONTENT_TYPE,
-            axum::http::header::AUTHORIZATION,
-        ]);
-    // ================================
+        .allow_headers([axum::http::header::CONTENT_TYPE, axum::http::header::AUTHORIZATION]);
 
     let public_routes = Router::new()
         .route("/", get(root))
@@ -115,37 +125,89 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/auth/logout", post(logout_user))
         .route("/api/user", patch(patch_user))
         .route("/api/oauth/{provider}/authorize", get(oauth_callback))
-        .route(
-            "/api/oauth/{provider}/disconnect",
-            post(remove_oauth_provider),
-        )
+        .route("/api/oauth/{provider}/disconnect", post(remove_oauth_provider))
         .route("/api/strava/activities", get(get_strava_activities))
-        .route(
-            "/api/strava/activities/{id}/streams",
-            get(get_strava_activity_streams),
-        )
+        .route("/api/strava/activities/{id}/streams", get(get_strava_activity_streams))
         .route("/api/strava/activities/sync", post(sync_strava_activities))
-        .route(
-            "/api/strava/activities/{id}/streams/sync",
-            post(sync_strava_activity_streams),
-        )
-        .route(
-            "/api/strava/activities/streams/sync",
-            post(sync_all_strava_activity_streams),
-        )
-        .route(
-            "/api/activities/{activity_id}/music",
-            get(get_activity_music),
-        )
+        .route("/api/strava/activities/{id}/streams/sync", post(sync_strava_activity_streams))
+        .route("/api/strava/activities/streams/sync", post(sync_all_strava_activity_streams))
+        .route("/api/activities/{activity_id}/music", get(get_activity_music))
         .route_layer(login_required!(AuthBackend))
         .with_state(state.clone().into());
+
+    // Create trace layer with comprehensive request/response logging
+    let trace_layer = TraceLayer::new_for_http()
+        .make_span_with(|request: &Request<axum::body::Body>| {
+            let matched_path = request
+                .extensions()
+                .get::<MatchedPath>()
+                .map(MatchedPath::as_str)
+                .unwrap_or("unknown");
+
+            let user_id = request
+                .extensions()
+                .get::<axum_login::AuthSession<AuthBackend>>()
+                .and_then(|auth| auth.user.as_ref())
+                .map(|user| user.id.to_string())
+                .unwrap_or_else(|| "anonymous".to_string());
+
+            info_span!(
+                "http_request",
+                method = %request.method(),
+                matched_path,
+                uri = %request.uri(),
+                version = ?request.version(),
+                user_id,
+                status = tracing::field::Empty,
+                latency_ms = tracing::field::Empty,
+            )
+        })
+        .on_request(|_request: &Request<axum::body::Body>, _span: &Span| {
+            tracing::debug!("Request started");
+        })
+        .on_response(|response: &Response<axum::body::Body>, latency: Duration, span: &Span| {
+            let status = response.status();
+            let latency_ms = latency.as_millis();
+
+            span.record("status", status.as_u16());
+            span.record("latency_ms", latency_ms);
+
+            match status.as_u16() {
+                200..=299 => {
+                    tracing::info!(
+                        status = status.as_u16(),
+                        latency_ms,
+                        "Request completed successfully"
+                    );
+                }
+                300..=399 => {
+                    tracing::info!(status = status.as_u16(), latency_ms, "Request redirected");
+                }
+                400..=499 => {
+                    tracing::warn!(status = status.as_u16(), latency_ms, "Client error");
+                }
+                500..=599 => {
+                    tracing::error!(status = status.as_u16(), latency_ms, "Server error");
+                }
+                _ => {
+                    tracing::info!(status = status.as_u16(), latency_ms, "Request completed");
+                }
+            }
+        })
+        .on_failure(|error: ServerErrorsFailureClass, latency: Duration, span: &Span| {
+            let latency_ms = latency.as_millis();
+            span.record("latency_ms", latency_ms);
+
+            tracing::error!(error = ?error, latency_ms, "Request failed");
+        });
 
     let app = Router::new()
         .merge(public_routes)
         .merge(protected_routes)
         .with_state(state)
         .layer(from_fn(middleware::handle_errors))
-        .layer(cors) // ← Use the new CORS configuration
+        .layer(trace_layer)
+        .layer(cors)
         .layer(auth_layer)
         .fallback(handler_404);
 
@@ -154,7 +216,15 @@ async fn main() -> anyhow::Result<()> {
 
     info!("Run Sous BPM API server starting on port {}", port);
     info!("CORS enabled for: {}", allowed_origin);
-    axum::serve(listener, app).await?;
+
+    let shutdown_signal = async {
+        tokio::signal::ctrl_c().await.expect("Failed to install Ctrl+C signal handler");
+        info!("Received Ctrl+C signal, initiating graceful shutdown...");
+    };
+
+    axum::serve(listener, app).with_graceful_shutdown(shutdown_signal).await?;
+
+    info!("Server shutdown complete");
 
     Ok(())
 }
