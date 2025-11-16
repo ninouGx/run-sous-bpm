@@ -39,14 +39,14 @@ export interface AuthResponse {
 
 // Strava types
 export interface StravaActivity {
-  id: number;
+  id: string; // Internal UUID
   name: string;
   type: string;
   distance: number;
   moving_time: number;
   elapsed_time: number;
   total_elevation_gain: number;
-  start_date: string;
+  start_time: string;
   timezone: string;
   description?: string;
 }
@@ -65,3 +65,19 @@ export interface ActivityMusicResponse {
   tracks: TrackWithTimestamp[];
   total_tracks: number;
 }
+
+export interface ActivityStreamPoint {
+  activity_id: string;
+  time: string;
+  distance: number;
+  latitude: number;
+  longitude: number;
+  altitude: number;
+  velocity: number;
+  heart_rate: number | null;
+  cadence: number | null;
+  watts: number | null;
+  temperature: number | null;
+}
+
+export type ActivityStream = ActivityStreamPoint[];
