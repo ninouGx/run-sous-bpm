@@ -20,9 +20,18 @@
   import { type } from "arktype";
   import { lastfmUsernameSchema } from "$lib/schemas/user";
   import { onMount, onDestroy } from "svelte";
+  import {
+    activitiesStore,
+    sortedActivities,
+    ActivityList,
+  } from "$lib/features/activity";
 
-  let stravaConnected = $derived($userStore.user?.oauth_connections?.strava ?? false);
-  let spotifyConnected = $derived($userStore.user?.oauth_connections?.spotify ?? false);
+  let stravaConnected = $derived(
+    $userStore.user?.oauth_connections?.strava ?? false
+  );
+  let spotifyConnected = $derived(
+    $userStore.user?.oauth_connections?.spotify ?? false
+  );
   let isLastFmUsernameSet = $derived(!!$userStore.user?.lastfm_username);
 
   // Last.fm username editing state
@@ -42,9 +51,9 @@
       .then(() => {
         toast.success(`${service} disconnected successfully`);
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         const errorMessage =
-          error?.message || `Failed to disconnect ${service}`;
+          error instanceof Error ? error.message : `Failed to disconnect ${service}`;
         toast.error(errorMessage);
       });
   }
@@ -78,9 +87,9 @@
       toast.success("Last.fm username updated successfully");
       isEditingLastfm = false;
       lastfmUsernameInput = "";
-    } catch (error: any) {
+    } catch (error: unknown) {
       const errorMessage =
-        error?.message || "Failed to update Last.fm username";
+        error instanceof Error ? error.message : "Failed to update Last.fm username";
 
       // Show inline error for validation failures
       if (errorMessage.includes("Invalid Last.fm username")) {
@@ -101,181 +110,236 @@
   function handleOAuthMessage(event: MessageEvent) {
     // CRITICAL: Validate message origin for security
     if (event.origin !== window.location.origin) {
-      console.warn('Ignoring OAuth message from untrusted origin:', event.origin);
+      console.warn(
+        "Ignoring OAuth message from untrusted origin:",
+        event.origin
+      );
       return;
     }
 
     // Validate message structure
     const message = event.data;
-    if (!message || message.type !== 'oauth-callback') {
+    if (!message || message.type !== "oauth-callback") {
       return;
     }
 
     // Handle OAuth callback result
-    if (message.status === 'success') {
-      const providerName = message.provider.charAt(0).toUpperCase() + message.provider.slice(1);
+    if (message.status === "success") {
+      const providerName =
+        message.provider.charAt(0).toUpperCase() + message.provider.slice(1);
       toast.success(`${providerName} connected successfully!`);
 
       // Refresh user state to get updated OAuth connections
       authService.checkAuth();
-    } else if (message.status === 'error') {
-      const errorMessage = message.error || 'Failed to connect OAuth provider';
+    } else if (message.status === "error") {
+      const errorMessage = message.error || "Failed to connect OAuth provider";
       toast.error(errorMessage);
+    }
+  }
+
+  // Load activities when component mounts
+  async function loadActivities() {
+    if (stravaConnected) {
+      await activitiesStore.load();
+    }
+  }
+
+  // Handle sync
+  async function handleSyncActivities() {
+    try {
+      await activitiesStore.sync();
+      toast.success("Activities synced successfully!");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to sync activities");
     }
   }
 
   // Setup and cleanup message listener
   onMount(() => {
-    window.addEventListener('message', handleOAuthMessage);
+    window.addEventListener("message", handleOAuthMessage);
+    loadActivities();
   });
 
   onDestroy(() => {
-    window.removeEventListener('message', handleOAuthMessage);
+    window.removeEventListener("message", handleOAuthMessage);
   });
 </script>
 
-<div class="flex flex-col lg:flex-row gap-8">
-  <div class="flex-1">
+<div class="space-y-6">
+  <!-- Header -->
+  <div>
     <h1 class="text-3xl font-bold">Dashboard</h1>
     <p class="text-muted-foreground">Welcome back, {$userStore.user?.email}</p>
   </div>
 
-  <aside class="lg:w-69 space-y-4">
-    <h2 class="text-xl font-semibold mb-4">Connected Services</h2>
-    <div class="flex flex-col gap-2">
-      <Card>
-        <CardHeader>
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-lg">Strava</CardTitle>
-            <Badge variant={stravaConnected ? "default" : "secondary"}>
-              {stravaConnected ? "Connected" : "Disconnected"}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {#if stravaConnected}
-            <Button
-              variant="outline"
-              size="sm"
-              class="w-full"
-              onclick={() => handleDisconnect(OauthProvider.Strava)}
-            >
-              Disconnect
-            </Button>
-          {:else}
-            <Button
-              size="sm"
-              class="w-full"
-              onclick={() => handleConnect(OauthProvider.Strava)}
-            >
-              Connect
-            </Button>
-          {/if}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-lg">Spotify</CardTitle>
-            <Badge variant={spotifyConnected ? "default" : "secondary"}>
-              {spotifyConnected ? "Connected" : "Disconnected"}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {#if spotifyConnected}
-            <Button
-              variant="outline"
-              size="sm"
-              class="w-full"
-              onclick={() => handleDisconnect(OauthProvider.Spotify)}
-            >
-              Disconnect
-            </Button>
-          {:else}
-            <Button
-              size="sm"
-              class="w-full"
-              onclick={() => handleConnect(OauthProvider.Spotify)}
-            >
-              Connect
-            </Button>
-          {/if}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-lg">Last.fm</CardTitle>
-            <Badge variant={isLastFmUsernameSet ? "default" : "secondary"}>
-              {isLastFmUsernameSet ? "Connected" : "Disconnected"}
-            </Badge>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {#if isEditingLastfm}
-            <div class="space-y-3">
-              <div class="space-y-2">
-                <Label for="lastfm-username">Last.fm Username</Label>
-                <Input
-                  id="lastfm-username"
-                  type="text"
-                  placeholder="Enter your Last.fm username"
-                  bind:value={lastfmUsernameInput}
-                  disabled={isLoadingLastfm}
-                  class={lastfmValidationError ? "border-destructive" : ""}
-                />
-                {#if lastfmValidationError}
-                  <p class="text-sm text-destructive">
-                    {lastfmValidationError}
-                  </p>
-                {/if}
-              </div>
-              <div class="flex gap-2">
-                <Button
-                  size="sm"
-                  class="flex-1"
-                  onclick={handleSaveLastfm}
-                  disabled={isLoadingLastfm}
-                >
-                  {isLoadingLastfm ? "Saving..." : "Save"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  class="flex-1"
-                  onclick={handleCancelLastfm}
-                  disabled={isLoadingLastfm}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </div>
-          {:else if isLastFmUsernameSet}
-            <div class="space-y-2">
-              <p class="text-sm text-muted-foreground">
-                Username: <span class="font-medium text-foreground"
-                  >{$userStore.user?.lastfm_username}</span
-                >
+  <!-- Main Content: Activities (left) + Sidebar (right) -->
+  <div class="flex flex-col lg:flex-row gap-8">
+    <!-- Main Content: Activities List -->
+    <div class="flex-1">
+      {#if stravaConnected}
+        <ActivityList
+          activities={$sortedActivities}
+          isLoading={$activitiesStore.isLoading}
+          error={$activitiesStore.error}
+          onSync={handleSyncActivities}
+        />
+      {:else}
+        <Card>
+          <CardContent class="py-16">
+            <div class="text-center">
+              <h3 class="text-lg font-semibold mb-2">
+                Connect Strava to Get Started
+              </h3>
+              <p class="text-sm text-muted-foreground mb-4">
+                Connect your Strava account to view and sync your activities
               </p>
+              <Button onclick={() => handleConnect(OauthProvider.Strava)}>
+                Connect Strava
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      {/if}
+    </div>
+
+    <!-- Sidebar: Connected Services -->
+    <aside class="lg:w-80 space-y-4">
+      <h2 class="text-xl font-semibold mb-4">Connected Services</h2>
+      <div class="flex flex-col gap-2">
+        <Card>
+          <CardHeader>
+            <div class="flex items-center justify-between">
+              <CardTitle class="text-lg">Strava</CardTitle>
+              <Badge variant={stravaConnected ? "default" : "secondary"}>
+                {stravaConnected ? "Connected" : "Disconnected"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {#if stravaConnected}
               <Button
                 variant="outline"
                 size="sm"
                 class="w-full"
-                onclick={handleEditLastfm}
+                onclick={() => handleDisconnect(OauthProvider.Strava)}
               >
-                Change Username
+                Disconnect
               </Button>
+            {:else}
+              <Button
+                size="sm"
+                class="w-full"
+                onclick={() => handleConnect(OauthProvider.Strava)}
+              >
+                Connect
+              </Button>
+            {/if}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div class="flex items-center justify-between">
+              <CardTitle class="text-lg">Spotify</CardTitle>
+              <Badge variant={spotifyConnected ? "default" : "secondary"}>
+                {spotifyConnected ? "Connected" : "Disconnected"}
+              </Badge>
             </div>
-          {:else}
-            <Button size="sm" class="w-full" onclick={handleEditLastfm}>
-              Set Username
-            </Button>
-          {/if}
-        </CardContent>
-      </Card>
-    </div>
-  </aside>
+          </CardHeader>
+          <CardContent>
+            {#if spotifyConnected}
+              <Button
+                variant="outline"
+                size="sm"
+                class="w-full"
+                onclick={() => handleDisconnect(OauthProvider.Spotify)}
+              >
+                Disconnect
+              </Button>
+            {:else}
+              <Button
+                size="sm"
+                class="w-full"
+                onclick={() => handleConnect(OauthProvider.Spotify)}
+              >
+                Connect
+              </Button>
+            {/if}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <div class="flex items-center justify-between">
+              <CardTitle class="text-lg">Last.fm</CardTitle>
+              <Badge variant={isLastFmUsernameSet ? "default" : "secondary"}>
+                {isLastFmUsernameSet ? "Connected" : "Disconnected"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {#if isEditingLastfm}
+              <div class="space-y-3">
+                <div class="space-y-2">
+                  <Label for="lastfm-username">Last.fm Username</Label>
+                  <Input
+                    id="lastfm-username"
+                    type="text"
+                    placeholder="Enter your Last.fm username"
+                    bind:value={lastfmUsernameInput}
+                    disabled={isLoadingLastfm}
+                    class={lastfmValidationError ? "border-destructive" : ""}
+                  />
+                  {#if lastfmValidationError}
+                    <p class="text-sm text-destructive">
+                      {lastfmValidationError}
+                    </p>
+                  {/if}
+                </div>
+                <div class="flex gap-2">
+                  <Button
+                    size="sm"
+                    class="flex-1"
+                    onclick={handleSaveLastfm}
+                    disabled={isLoadingLastfm}
+                  >
+                    {isLoadingLastfm ? "Saving..." : "Save"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    class="flex-1"
+                    onclick={handleCancelLastfm}
+                    disabled={isLoadingLastfm}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            {:else if isLastFmUsernameSet}
+              <div class="space-y-2">
+                <p class="text-sm text-muted-foreground">
+                  Username: <span class="font-medium text-foreground"
+                    >{$userStore.user?.lastfm_username}</span
+                  >
+                </p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  class="w-full"
+                  onclick={handleEditLastfm}
+                >
+                  Change Username
+                </Button>
+              </div>
+            {:else}
+              <Button size="sm" class="w-full" onclick={handleEditLastfm}>
+                Set Username
+              </Button>
+            {/if}
+          </CardContent>
+        </Card>
+      </div>
+    </aside>
+  </div>
 </div>

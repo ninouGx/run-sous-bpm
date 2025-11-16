@@ -34,10 +34,7 @@
   <nav class="border-b">
     <div class="container mx-auto px-4 py-4 flex items-center justify-between">
       <div class="flex items-center gap-8">
-        <h1 class="text-xl font-bold">Run Sous BPM</h1>
-        <div class="flex gap-4">
-          <a href="/dashboard" class="text-sm hover:text-primary">Dashboard</a>
-        </div>
+        <a href="/" class="text-xl font-bold">Run Sous BPM</a>
       </div>
 
       <div class="flex items-center gap-4">
