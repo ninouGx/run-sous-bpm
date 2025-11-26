@@ -39,14 +39,16 @@ impl SpotifyApiClient {
     pub async fn get_recently_played_tracks(
         &self,
         access_token: &str,
-        param: SpotifyRecentlyPlayedParams
+        param: SpotifyRecentlyPlayedParams,
     ) -> Result<SpotifyRecentlyPlayedResponse, IntegrationError> {
         let url = format!("{}/me/player/recently-played", self.base_url);
 
-        let response = self.integration_client.get_with_query(&url, access_token, &param).await?;
-        let spotify_response: SpotifyRecentlyPlayedResponse = response
-            .json().await
-            .map_err(IntegrationError::from)?;
+        let response = self
+            .integration_client
+            .get_with_query(&url, access_token, &param)
+            .await?;
+        let spotify_response: SpotifyRecentlyPlayedResponse =
+            response.json().await.map_err(IntegrationError::from)?;
         Ok(spotify_response)
     }
 }

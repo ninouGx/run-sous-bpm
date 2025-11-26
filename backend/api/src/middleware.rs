@@ -1,11 +1,11 @@
 use axum::{
     body::Body,
-    http::{ Request, StatusCode },
+    http::{Request, StatusCode},
     middleware::Next,
-    response::{ IntoResponse, Json, Response },
+    response::{IntoResponse, Json, Response},
 };
 use serde_json::json;
-use tracing::{ debug, error, warn };
+use tracing::{debug, error, warn};
 
 /// Error handling middleware that converts error responses to JSON
 /// and logs them with appropriate severity levels
@@ -14,6 +14,7 @@ use tracing::{ debug, error, warn };
 /// - Lets successful/redirect responses pass through unchanged
 /// - Converts 4xx/5xx responses to structured JSON errors
 /// - Logs errors with context from the tracing span
+#[allow(clippy::too_many_lines)]
 pub async fn handle_errors(req: Request<Body>, next: Next) -> Response {
     // Extract path for context in logs (the span will already have this, but useful for manual logs)
     let path = req.uri().path().to_string();
@@ -73,14 +74,13 @@ pub async fn handle_errors(req: Request<Body>, next: Next) -> Response {
             );
             (
                 StatusCode::FORBIDDEN,
-                Json(
-                    json!({
+                Json(json!({
                     "error": "Forbidden",
                     "status": 403,
                     "message": "You don't have permission to access this resource"
-                })
-                ),
-            ).into_response()
+                })),
+            )
+                .into_response()
         }
         // NOT_FOUND is handled by the fallback handler with custom hint message
         StatusCode::NOT_FOUND => response,
@@ -92,14 +92,13 @@ pub async fn handle_errors(req: Request<Body>, next: Next) -> Response {
             );
             (
                 StatusCode::METHOD_NOT_ALLOWED,
-                Json(
-                    json!({
+                Json(json!({
                     "error": "Method Not Allowed",
                     "status": 405,
                     "message": "The requested HTTP method is not allowed for this endpoint"
-                })
-                ),
-            ).into_response()
+                })),
+            )
+                .into_response()
         }
         StatusCode::INTERNAL_SERVER_ERROR => {
             error!(
@@ -109,14 +108,13 @@ pub async fn handle_errors(req: Request<Body>, next: Next) -> Response {
             );
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                Json(
-                    json!({
+                Json(json!({
                     "error": "Internal Server Error",
                     "status": 500,
                     "message": "An unexpected error occurred. The issue has been logged."
-                })
-                ),
-            ).into_response()
+                })),
+            )
+                .into_response()
         }
         StatusCode::BAD_GATEWAY => {
             error!(
@@ -126,14 +124,13 @@ pub async fn handle_errors(req: Request<Body>, next: Next) -> Response {
             );
             (
                 StatusCode::BAD_GATEWAY,
-                Json(
-                    json!({
+                Json(json!({
                     "error": "Bad Gateway",
                     "status": 502,
                     "message": "Error communicating with external service"
-                })
-                ),
-            ).into_response()
+                })),
+            )
+                .into_response()
         }
         StatusCode::SERVICE_UNAVAILABLE => {
             error!(
@@ -143,14 +140,13 @@ pub async fn handle_errors(req: Request<Body>, next: Next) -> Response {
             );
             (
                 StatusCode::SERVICE_UNAVAILABLE,
-                Json(
-                    json!({
+                Json(json!({
                     "error": "Service Unavailable",
                     "status": 503,
                     "message": "The service is temporarily unavailable. Please try again later."
-                })
-                ),
-            ).into_response()
+                })),
+            )
+                .into_response()
         }
         // For other errors, return a generic error response
         _ => {
@@ -162,14 +158,13 @@ pub async fn handle_errors(req: Request<Body>, next: Next) -> Response {
             );
             (
                 status,
-                Json(
-                    json!({
+                Json(json!({
                     "error": status.canonical_reason().unwrap_or("Error"),
                     "status": status.as_u16(),
                     "message": status.canonical_reason().unwrap_or("An error occurred")
-                })
-                ),
-            ).into_response()
+                })),
+            )
+                .into_response()
         }
     }
 }

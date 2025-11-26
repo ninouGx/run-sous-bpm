@@ -59,6 +59,16 @@ class ActivitiesService {
     );
     return response;
   }
+
+  /**
+   * Sync all activity streams from Strava
+   */
+  async syncAllActivityStreams(): Promise<{ message: string }> {
+    const response = await apiClient.post<{ message: string }>(
+      API_ENDPOINTS.strava.syncAllActivityStreams
+    );
+    return response;
+  }
 }
 
 export const activitiesService = new ActivitiesService();

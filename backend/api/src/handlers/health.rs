@@ -1,5 +1,5 @@
 use axum::{http::StatusCode, response::Json};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 pub async fn health() -> (StatusCode, Json<Value>) {
     (

@@ -1,6 +1,6 @@
 use argon2::{
+    password_hash::{rand_core::OsRng, Error, SaltString},
     Argon2,
-    password_hash::{Error, SaltString, rand_core::OsRng},
 };
 
 /// Hashes a password using Argon2id algorithm with random salt

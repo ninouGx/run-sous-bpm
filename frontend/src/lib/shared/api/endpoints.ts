@@ -21,6 +21,7 @@ export const API_ENDPOINTS = {
     activityStreams: (id: string) => `/api/strava/activities/${id}/streams`,
     syncActivityStreams: (id: string) =>
       `/api/strava/activities/${id}/streams/sync`,
+    syncAllActivityStreams: "/api/strava/activities/streams/sync",
   },
   activities: {
     music: (activityId: string) => `/api/activities/${activityId}/music`,

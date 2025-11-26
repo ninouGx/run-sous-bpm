@@ -1,5 +1,5 @@
-use lastfm_client::LastFmClient as LastFmApiClient;
 use lastfm_client::types::RecentTrack;
+use lastfm_client::LastFmClient as LastFmApiClient;
 
 use crate::common::IntegrationError;
 

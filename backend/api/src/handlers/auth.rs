@@ -1,14 +1,14 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, http::StatusCode};
+use axum::{extract::State, http::StatusCode, Json};
 use axum_login::AuthSession;
 use run_sous_bpm_core::{
-    auth::{AuthBackend, Credentials, hash_password},
+    auth::{hash_password, AuthBackend, Credentials},
     config::OAuthProvider,
     database::{create_user, get_user_by_email},
     services::is_oauth_provider_connected,
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use validator::Validate;
 
 use crate::AppState;

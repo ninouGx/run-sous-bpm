@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
-use axum::{ Json, extract::{ Path, State }, http::StatusCode };
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    Json,
+};
 use axum_login::AuthSession;
 use run_sous_bpm_core::auth::AuthBackend;
 use sea_orm::prelude::Uuid;
-use serde_json::{ Value, json };
+use serde_json::{json, Value};
 use tracing::info;
 
 use crate::AppState;
@@ -21,42 +25,37 @@ use crate::AppState;
 /// - `502 Bad Gateway`: Failed to retrieve OAuth token or Strava API error
 pub async fn sync_strava_activities(
     State(state): State<Arc<AppState>>,
-    auth_session: AuthSession<AuthBackend>
+    auth_session: AuthSession<AuthBackend>,
 ) -> (StatusCode, Json<Value>) {
     let Some(user) = auth_session.user else {
         return (
             StatusCode::UNAUTHORIZED,
-            Json(
-                json!({
+            Json(json!({
                 "error": "Unauthorized",
                 "message": "You must be logged in to access this resource"
-            })
-            ),
+            })),
         );
     };
     let user_id = user.id;
 
-    match
-        run_sous_bpm_core::services::sync_strava_activities(
-            user_id,
-            &state.strava_client,
-            &state.db_connection
-        ).await
+    match run_sous_bpm_core::services::sync_strava_activities(
+        user_id,
+        &state.strava_client,
+        &state.db_connection,
+        &state.encryption_service,
+    )
+    .await
     {
-        Ok(activities) =>
-            (
-                StatusCode::OK,
-                Json(
-                    json!(
+        Ok(activities) => (
+            StatusCode::OK,
+            Json(json!(
                 { "message": format!("Successfully synced {} activities", activities.len())}
-            )
-                ),
-            ),
-        Err(err) =>
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(json!({"error": format!("Failed to sync Strava activities: {}", err)})),
-            ),
+            )),
+        ),
+        Err(err) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": format!("Failed to sync Strava activities: {}", err)})),
+        ),
     }
 }
 
@@ -78,103 +77,102 @@ pub async fn sync_strava_activities(
 pub async fn sync_strava_activity_streams(
     State(state): State<Arc<AppState>>,
     auth_session: AuthSession<AuthBackend>,
-    Path(id): Path<String>
+    Path(id): Path<String>,
 ) -> (StatusCode, Json<Value>) {
     let Some(user) = auth_session.user else {
         return (
             StatusCode::UNAUTHORIZED,
-            Json(
-                json!({
+            Json(json!({
                 "error": "Unauthorized",
                 "message": "You must be logged in to access this resource"
-            })
-            ),
+            })),
         );
     };
     let user_id = user.id;
 
     let Ok(activity_id) = id.parse::<Uuid>() else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid activity ID format"})));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Invalid activity ID format"})),
+        );
     };
 
     info!(user_id = %user_id, activity_id = %activity_id, "Starting sync of Strava activity streams");
 
     // First get the activity to get its external_id
-    match
-        run_sous_bpm_core::database::activity_repository::get_activity_by_id(
-            &state.db_connection,
-            activity_id
-        ).await
+    match run_sous_bpm_core::database::activity_repository::get_activity_by_id(
+        &state.db_connection,
+        activity_id,
+    )
+    .await
     {
         Ok(Some(activity)) if activity.user_id == user_id => {
             let external_id = activity.external_id;
             info!(user_id = %user_id, activity_id = %activity_id, external_id = %external_id, "Syncing Strava activity streams");
 
-            match
-                run_sous_bpm_core::services::sync_strava_activity_streams(
-                    user_id,
-                    external_id,
-                    &state.strava_client,
-                    &state.db_connection
-                ).await
+            match run_sous_bpm_core::services::sync_strava_activity_streams(
+                user_id,
+                external_id,
+                &state.strava_client,
+                &state.db_connection,
+                &state.encryption_service,
+            )
+            .await
             {
-                Ok(()) =>
-                    (
-                        StatusCode::OK,
-                        Json(json!({"message": "Successfully synced activity streams"})),
+                Ok(()) => (
+                    StatusCode::OK,
+                    Json(json!({"message": "Successfully synced activity streams"})),
+                ),
+                Err(err) => (
+                    StatusCode::BAD_GATEWAY,
+                    Json(
+                        json!({"error": format!("Failed to sync Strava activity streams: {}", err)}),
                     ),
-                Err(err) =>
-                    (
-                        StatusCode::BAD_GATEWAY,
-                        Json(
-                            json!({"error": format!("Failed to sync Strava activity streams: {}", err)})
-                        ),
-                    ),
+                ),
             }
         }
-        Ok(Some(_)) => { (StatusCode::NOT_FOUND, Json(json!({"error": "Activity not found"}))) }
-        Ok(None) => { (StatusCode::NOT_FOUND, Json(json!({"error": "Activity not found"}))) }
-        Err(err) =>
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": format!("Database error: {}", err)})),
-            ),
+        Ok(Some(_) | None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "Activity not found"})),
+        ),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("Database error: {}", err)})),
+        ),
     }
 }
 
 pub async fn sync_all_strava_activity_streams(
     State(state): State<Arc<AppState>>,
-    auth_session: AuthSession<AuthBackend>
+    auth_session: AuthSession<AuthBackend>,
 ) -> (StatusCode, Json<Value>) {
     let Some(user) = auth_session.user else {
         return (
             StatusCode::UNAUTHORIZED,
-            Json(
-                json!({
+            Json(json!({
                 "error": "Unauthorized",
                 "message": "You must be logged in to access this resource"
-            })
-            ),
+            })),
         );
     };
     let user_id = user.id;
 
-    match
-        run_sous_bpm_core::services::sync_all_strava_activity_streams(
-            user_id,
-            &state.strava_client,
-            &state.db_connection
-        ).await
+    match run_sous_bpm_core::services::sync_all_strava_activity_streams(
+        user_id,
+        &state.strava_client,
+        &state.db_connection,
+        &state.encryption_service,
+    )
+    .await
     {
-        Ok(()) =>
-            (StatusCode::OK, Json(json!({"message": "Successfully synced all activity streams"}))),
-        Err(err) =>
-            (
-                StatusCode::BAD_GATEWAY,
-                Json(
-                    json!({"error": format!("Failed to sync all Strava activity streams: {}", err)})
-                ),
-            ),
+        Ok(()) => (
+            StatusCode::OK,
+            Json(json!({"message": "Successfully synced all activity streams"})),
+        ),
+        Err(err) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({"error": format!("Failed to sync all Strava activity streams: {}", err)})),
+        ),
     }
 }
 
@@ -189,33 +187,30 @@ pub async fn sync_all_strava_activity_streams(
 /// - `500 Internal Server Error`: Database query failed
 pub async fn get_strava_activities(
     State(state): State<Arc<AppState>>,
-    auth_session: AuthSession<AuthBackend>
+    auth_session: AuthSession<AuthBackend>,
 ) -> (StatusCode, Json<Value>) {
     let Some(user) = auth_session.user else {
         return (
             StatusCode::UNAUTHORIZED,
-            Json(
-                json!({
+            Json(json!({
                 "error": "Unauthorized",
                 "message": "You must be logged in to access this resource"
-            })
-            ),
+            })),
         );
     };
     let user_id = user.id;
 
-    match
-        run_sous_bpm_core::database::activity_repository::get_activities_by_user(
-            &state.db_connection,
-            user_id
-        ).await
+    match run_sous_bpm_core::database::activity_repository::get_activities_by_user(
+        &state.db_connection,
+        user_id,
+    )
+    .await
     {
         Ok(activities) => (StatusCode::OK, Json(json!(activities))),
-        Err(err) =>
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": format!("Failed to retrieve activities: {}", err)})),
-            ),
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("Failed to retrieve activities: {}", err)})),
+        ),
     }
 }
 
@@ -237,62 +232,65 @@ pub async fn get_strava_activities(
 pub async fn get_strava_activity_streams(
     State(state): State<Arc<AppState>>,
     auth_session: AuthSession<AuthBackend>,
-    Path(id): Path<String>
+    Path(id): Path<String>,
 ) -> (StatusCode, Json<Value>) {
     let Some(user) = auth_session.user else {
         return (
             StatusCode::UNAUTHORIZED,
-            Json(
-                json!({
+            Json(json!({
                 "error": "Unauthorized",
                 "message": "You must be logged in to access this resource"
-            })
-            ),
+            })),
         );
     };
     let user_id = user.id;
 
     let Ok(activity_id) = id.parse::<sea_orm::prelude::Uuid>() else {
-        return (StatusCode::BAD_REQUEST, Json(json!({"error": "Invalid activity ID format"})));
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(json!({"error": "Invalid activity ID format"})),
+        );
     };
 
     // First verify the activity exists and belongs to the user
-    match
-        run_sous_bpm_core::database::activity_repository::get_activity_by_id(
-            &state.db_connection,
-            activity_id
-        ).await
+    match run_sous_bpm_core::database::activity_repository::get_activity_by_id(
+        &state.db_connection,
+        activity_id,
+    )
+    .await
     {
         Ok(Some(activity)) if activity.user_id == user_id => {
             // Activity found and belongs to user, get streams
-            match
-                run_sous_bpm_core::database::activity_stream_repository::get_activity_streams(
-                    &state.db_connection,
-                    activity_id
-                ).await
+            match run_sous_bpm_core::database::activity_stream_repository::get_activity_streams(
+                &state.db_connection,
+                activity_id,
+            )
+            .await
             {
                 Ok(streams) => (StatusCode::OK, Json(json!(streams))),
-                Err(err) =>
-                    (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(
-                            json!({"error": format!("Failed to retrieve activity streams: {}", err)})
-                        ),
-                    ),
+                Err(err) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Failed to retrieve activity streams: {}", err)})),
+                ),
             }
         }
         Ok(Some(_)) => {
             // Activity exists but doesn't belong to user
-            (StatusCode::NOT_FOUND, Json(json!({"error": "Activity not found"})))
+            (
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Activity not found"})),
+            )
         }
         Ok(None) => {
             // Activity doesn't exist
-            (StatusCode::NOT_FOUND, Json(json!({"error": "Activity not found"})))
-        }
-        Err(err) =>
             (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(json!({"error": format!("Database error: {}", err)})),
-            ),
+                StatusCode::NOT_FOUND,
+                Json(json!({"error": "Activity not found"})),
+            )
+        }
+        Err(err) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("Database error: {}", err)})),
+        ),
     }
 }

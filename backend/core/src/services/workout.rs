@@ -4,6 +4,7 @@ use tracing::info;
 
 use crate::{
     config::OAuthProvider,
+    crypto::EncryptionService,
     database::{activity, activity_repository, batch_upsert_activity_streams, upsert_activity},
     models::{CreateActivityDto, ValidatedActivityStreams},
     services::get_valid_token,
@@ -22,8 +23,9 @@ pub async fn sync_strava_activities(
     user_id: uuid::Uuid,
     strava_client: &StravaApiClient,
     db_connection: &DatabaseConnection,
+    encryption: &EncryptionService,
 ) -> Result<Vec<activity::Model>, Box<dyn std::error::Error>> {
-    let token = get_valid_token(db_connection, user_id, OAuthProvider::Strava).await?;
+    let token = get_valid_token(db_connection, user_id, OAuthProvider::Strava, encryption).await?;
 
     let strava_activities = strava_client.get_athlete_activities(&token, None).await?;
 
@@ -57,8 +59,9 @@ pub async fn sync_strava_activity_streams(
     external_id: i64,
     strava_client: &StravaApiClient,
     db_connection: &DatabaseConnection,
+    encryption: &EncryptionService,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let token = get_valid_token(db_connection, user_id, OAuthProvider::Strava).await?;
+    let token = get_valid_token(db_connection, user_id, OAuthProvider::Strava, encryption).await?;
     let keys = &[
         "time",
         "distance",
@@ -108,6 +111,7 @@ pub async fn sync_all_strava_activity_streams(
     user_id: uuid::Uuid,
     strava_client: &StravaApiClient,
     db_connection: &DatabaseConnection,
+    encryption: &EncryptionService,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let activities = activity_repository::get_activities_by_user(db_connection, user_id).await?;
 
@@ -117,6 +121,7 @@ pub async fn sync_all_strava_activity_streams(
             activity.external_id,
             strava_client,
             db_connection,
+            encryption,
         )
         .await
         {

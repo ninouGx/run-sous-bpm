@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use run_sous_bpm_integrations::strava::{StravaActivityStreamResponse, StreamData};
-use sea_orm::{ActiveValue::Set, prelude::DateTimeWithTimeZone};
+use sea_orm::{prelude::DateTimeWithTimeZone, ActiveValue::Set};
 use tracing::info;
 use uuid::Uuid;
 

@@ -2,7 +2,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json},
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 pub async fn root() -> Json<Value> {
     Json(json!({

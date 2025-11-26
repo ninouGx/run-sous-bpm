@@ -1,9 +1,9 @@
 use std::sync::Arc;
 
 use axum::{
-    Json,
     extract::{Path, Query, State},
     http::StatusCode,
+    Json,
 };
 use axum_login::AuthSession;
 use run_sous_bpm_core::{
@@ -13,11 +13,11 @@ use run_sous_bpm_core::{
 };
 use sea_orm::prelude::Uuid;
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::{
-    AppState,
     responses::{ActivityMusicResponse, LastFmRangeResponse, LastFmTrackInfo, TrackWithTimestamp},
+    AppState,
 };
 
 pub async fn get_activity_music(

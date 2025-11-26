@@ -53,7 +53,9 @@
       })
       .catch((error: unknown) => {
         const errorMessage =
-          error instanceof Error ? error.message : `Failed to disconnect ${service}`;
+          error instanceof Error
+            ? error.message
+            : `Failed to disconnect ${service}`;
         toast.error(errorMessage);
       });
   }
@@ -89,7 +91,9 @@
       lastfmUsernameInput = "";
     } catch (error: unknown) {
       const errorMessage =
-        error instanceof Error ? error.message : "Failed to update Last.fm username";
+        error instanceof Error
+          ? error.message
+          : "Failed to update Last.fm username";
 
       // Show inline error for validation failures
       if (errorMessage.includes("Invalid Last.fm username")) {
@@ -150,7 +154,9 @@
       await activitiesStore.sync();
       toast.success("Activities synced successfully!");
     } catch (error: unknown) {
-      toast.error(error instanceof Error ? error.message : "Failed to sync activities");
+      toast.error(
+        error instanceof Error ? error.message : "Failed to sync activities"
+      );
     }
   }
 

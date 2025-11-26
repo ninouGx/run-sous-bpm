@@ -51,6 +51,7 @@ function createActivitiesStore() {
 
       try {
         await activitiesService.syncActivities();
+        await activitiesService.syncAllActivityStreams();
         const activities = await activitiesService.getActivities();
         update((state) => ({
           ...state,

@@ -1,6 +1,6 @@
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DbErr,
-    prelude::DateTimeWithTimeZone,
+    prelude::DateTimeWithTimeZone, ActiveModelTrait, ActiveValue::Set, ColumnTrait,
+    DatabaseConnection, DbErr,
 };
 use sea_orm::{EntityTrait, QueryFilter};
 use uuid::Uuid;
