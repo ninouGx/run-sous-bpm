@@ -11,7 +11,7 @@ use run_sous_bpm_core::{
     config::OAuthProvider,
     services::{handle_oauth_callback, oauth::start_oauth_flow},
 };
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use tracing::info;
 
 use crate::AppState;
@@ -61,8 +61,7 @@ pub async fn oauth_process_callback(
     State(app_state): State<AppState>,
     params: Query<OAuthCallbackParams>,
 ) -> Redirect {
-    let frontend_url =
-        std::env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
+    let frontend_url = std::env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
 
     let (code, state) = (params.code.clone(), params.state.clone());
     match handle_oauth_callback(
@@ -70,6 +69,7 @@ pub async fn oauth_process_callback(
         state.clone(),
         &app_state.oauth_session_store,
         &app_state.db_connection,
+        &app_state.encryption_service,
     )
     .await
     {

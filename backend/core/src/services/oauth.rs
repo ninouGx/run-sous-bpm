@@ -1,11 +1,12 @@
 use super::oauth_session::OAuthSessionManager;
 use axum_login::tracing::info;
 use oauth2::basic::{BasicClient, BasicTokenResponse};
+use oauth2::{reqwest, RefreshToken};
 use oauth2::{AuthorizationCode, CsrfToken, PkceCodeChallenge, PkceCodeVerifier, TokenResponse};
-use oauth2::{RefreshToken, reqwest};
 use sea_orm::DatabaseConnection;
 
 use crate::config::{ClientInfo, OAuthProvider};
+use crate::crypto::EncryptionService;
 use crate::database::repositories::oauth_token_repository::upsert_oauth_token;
 use crate::database::{get_oauth_token_by_provider, oauth_token};
 use crate::services::OAuthState;
@@ -86,6 +87,7 @@ pub async fn handle_oauth_callback(
     state: String,
     session_store: &OAuthSessionManager,
     db_connection: &DatabaseConnection,
+    encryption: &EncryptionService,
 ) -> Result<(BasicTokenResponse, OAuthProvider), Box<dyn std::error::Error>> {
     info!(
         "Handling OAuth callback with code: {}, state: {}",
@@ -113,16 +115,22 @@ pub async fn handle_oauth_callback(
         .request_async(&http_client)
         .await?;
 
+    let encrypted_access_token = encryption.encrypt(token_result.access_token().secret())?;
+    let encrypted_refresh_token = token_result
+        .refresh_token()
+        .map(|r| encryption.encrypt(r.secret()))
+        .transpose()?;
+
     upsert_oauth_token(
         db_connection,
         // You would typically get the user ID from your session or context.
         session_state.user_id,
         provider,
-        token_result.access_token().secret().to_string(),
-        token_result.refresh_token().map(|r| r.secret().to_string()),
+        encrypted_access_token,
+        encrypted_refresh_token,
         token_result.expires_in().map(|dur| {
-            let expiry = chrono::Utc::now() + chrono::Duration::from_std(dur)
-                .expect("Token expiry duration out of range");
+            let expiry = chrono::Utc::now()
+                + chrono::Duration::from_std(dur).expect("Token expiry duration out of range");
             expiry.into()
         }),
         Some(
@@ -147,11 +155,13 @@ pub async fn handle_oauth_callback(
 /// Returns an error if:
 /// - Token not found in database
 /// - Token refresh fails
+/// - Decryption fails
 /// - Database operation fails
 pub async fn get_valid_token(
     db_connection: &DatabaseConnection,
     user_id: uuid::Uuid,
     provider: OAuthProvider,
+    encryption: &EncryptionService,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let token = get_oauth_token_by_provider(db_connection, user_id, provider).await?;
 
@@ -160,14 +170,16 @@ pub async fn get_valid_token(
     if let Some(expires_at) = token.expires_at {
         if expires_at < chrono::Utc::now() {
             if token.refresh_token.is_some() {
-                return refresh_token(db_connection, &token, provider).await;
+                return refresh_token(db_connection, &token, provider, encryption).await;
             }
             // Token expired and no refresh token available
             return Err("Token expired and no refresh token available".into());
         }
     }
 
-    Ok(token.access_token)
+    // Decrypt the access token before returning
+    let decrypted_token = encryption.decrypt(&token.access_token)?;
+    Ok(decrypted_token)
 }
 
 /// Refreshes an expired OAuth token
@@ -178,6 +190,8 @@ pub async fn get_valid_token(
 /// - OAuth provider configuration is missing
 /// - HTTP client fails to build
 /// - Token exchange request fails
+/// - Decryption fails
+/// - Encryption fails
 /// - Database update fails
 ///
 /// # Panics
@@ -187,12 +201,16 @@ pub async fn refresh_token(
     db_connection: &DatabaseConnection,
     token: &oauth_token::Model,
     provider: OAuthProvider,
+    encryption: &EncryptionService,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let refresh_token_str = token
+    let encrypted_refresh_token_str = token
         .refresh_token
         .as_ref()
         .ok_or("No refresh token available")?;
-    let refresh_token = RefreshToken::new(refresh_token_str.clone());
+
+    // Decrypt the refresh token before using it
+    let decrypted_refresh_token = encryption.decrypt(encrypted_refresh_token_str)?;
+    let refresh_token = RefreshToken::new(decrypted_refresh_token);
 
     let client_info = ClientInfo::from_provider(provider);
     let oauth_client = build_oauth_client(&client_info);
@@ -207,15 +225,22 @@ pub async fn refresh_token(
         .await
         .map_err(|e| format!("Token refresh request failed: {e}"))?;
 
+    // Encrypt the new tokens before storing
+    let encrypted_access_token = encryption.encrypt(token_result.access_token().secret())?;
+    let encrypted_refresh_token = token_result
+        .refresh_token()
+        .map(|r| encryption.encrypt(r.secret()))
+        .transpose()?;
+
     upsert_oauth_token(
         db_connection,
         token.user_id,
         provider,
-        token_result.access_token().secret().to_string(),
-        token_result.refresh_token().map(|r| r.secret().to_string()),
+        encrypted_access_token,
+        encrypted_refresh_token,
         token_result.expires_in().map(|dur| {
-            let expiry = chrono::Utc::now() + chrono::Duration::from_std(dur)
-                .expect("Token expiry duration out of range");
+            let expiry = chrono::Utc::now()
+                + chrono::Duration::from_std(dur).expect("Token expiry duration out of range");
             expiry.into()
         }),
         Some(
@@ -228,6 +253,7 @@ pub async fn refresh_token(
     )
     .await?;
 
+    // Return the decrypted access token
     Ok(token_result.access_token().secret().to_string())
 }
 
