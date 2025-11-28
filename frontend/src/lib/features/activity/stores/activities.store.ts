@@ -38,7 +38,10 @@ function createActivitiesStore() {
         update((state) => ({
           ...state,
           isLoading: false,
-          error: error instanceof Error ? error.message : "Failed to load activities",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load activities",
         }));
       }
     },
@@ -64,7 +67,10 @@ function createActivitiesStore() {
         update((state) => ({
           ...state,
           isLoading: false,
-          error: error instanceof Error ? error.message : "Failed to sync activities",
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to sync activities",
         }));
       }
     },
@@ -95,8 +101,9 @@ export const activitiesStore = createActivitiesStore();
 // Derived stores for common queries
 export const sortedActivities = derived(activitiesStore, ($store) =>
   [...$store.activities].sort(
-    (a, b) => new Date(b.start_time).getTime() - new Date(a.start_time).getTime()
-  )
+    (a, b) =>
+      new Date(b.start_time).getTime() - new Date(a.start_time).getTime(),
+  ),
 );
 
 export const activityTypes = derived(activitiesStore, ($store) => {

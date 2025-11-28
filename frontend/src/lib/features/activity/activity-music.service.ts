@@ -8,7 +8,7 @@ class ActivityMusicService {
    */
   async getActivityMusic(activityId: string): Promise<ActivityMusicResponse> {
     const response = await apiClient.get<ActivityMusicResponse>(
-      API_ENDPOINTS.activities.music(activityId)
+      API_ENDPOINTS.activities.music(activityId),
     );
     return response;
   }

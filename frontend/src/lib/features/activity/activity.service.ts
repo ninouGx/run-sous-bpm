@@ -8,7 +8,7 @@ class ActivitiesService {
    */
   async getActivities(): Promise<StravaActivity[]> {
     const response = await apiClient.get<StravaActivity[]>(
-      API_ENDPOINTS.strava.activities
+      API_ENDPOINTS.strava.activities,
     );
     return response;
   }
@@ -19,7 +19,7 @@ class ActivitiesService {
    */
   async syncActivities(): Promise<{ message: string; count: number }> {
     const response = await apiClient.post<{ message: string; count: number }>(
-      API_ENDPOINTS.strava.syncActivities
+      API_ENDPOINTS.strava.syncActivities,
     );
     return response;
   }
@@ -30,11 +30,11 @@ class ActivitiesService {
   async getActivity(id: string): Promise<StravaActivity> {
     const activities = await this.getActivities();
     const activity = activities.find((a) => a.id.toString() === id);
-    
+
     if (!activity) {
       throw new Error(`Activity ${id} not found`);
     }
-    
+
     return activity;
   }
 
@@ -44,7 +44,7 @@ class ActivitiesService {
    */
   async getActivityStreams(id: string): Promise<ActivityStream> {
     const response = await apiClient.get<ActivityStream>(
-      API_ENDPOINTS.strava.activityStreams(id)
+      API_ENDPOINTS.strava.activityStreams(id),
     );
     return response;
   }
@@ -55,7 +55,7 @@ class ActivitiesService {
    */
   async syncActivityStreams(id: string): Promise<{ message: string }> {
     const response = await apiClient.post<{ message: string }>(
-      API_ENDPOINTS.strava.syncActivityStreams(id)
+      API_ENDPOINTS.strava.syncActivityStreams(id),
     );
     return response;
   }
@@ -65,7 +65,7 @@ class ActivitiesService {
    */
   async syncAllActivityStreams(): Promise<{ message: string }> {
     const response = await apiClient.post<{ message: string }>(
-      API_ENDPOINTS.strava.syncAllActivityStreams
+      API_ENDPOINTS.strava.syncAllActivityStreams,
     );
     return response;
   }

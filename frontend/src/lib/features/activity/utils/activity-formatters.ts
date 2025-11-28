@@ -29,29 +29,35 @@ export function formatDuration(seconds: number): string {
 /**
  * Calculate and format pace (min/km)
  */
-export function formatPace(distanceMeters: number, timeSeconds: number): string {
+export function formatPace(
+  distanceMeters: number,
+  timeSeconds: number,
+): string {
   if (distanceMeters === 0) return "—";
-  
+
   const km = distanceMeters / 1000;
   const minutes = timeSeconds / 60;
   const paceMinPerKm = minutes / km;
-  
+
   const mins = Math.floor(paceMinPerKm);
   const secs = Math.round((paceMinPerKm - mins) * 60);
-  
+
   return `${mins}:${secs.toString().padStart(2, "0")} /km`;
 }
 
 /**
  * Calculate and format speed (km/h)
  */
-export function formatSpeed(distanceMeters: number, timeSeconds: number): string {
+export function formatSpeed(
+  distanceMeters: number,
+  timeSeconds: number,
+): string {
   if (timeSeconds === 0) return "—";
-  
+
   const km = distanceMeters / 1000;
   const hours = timeSeconds / 3600;
   const speed = km / hours;
-  
+
   return `${speed.toFixed(1)} km/h`;
 }
 
@@ -65,7 +71,10 @@ export function formatElevation(meters: number): string {
 /**
  * Format activity date
  */
-export function formatActivityDate(dateString: string, is24Hour: boolean = true): string {
+export function formatActivityDate(
+  dateString: string,
+  is24Hour: boolean = true,
+): string {
   const date = new Date(dateString);
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -80,7 +89,10 @@ export function formatActivityDate(dateString: string, is24Hour: boolean = true)
 /**
  * Format time to HH:MM depending on wanted format 24h or 12h
  */
-export function formatTime(dateString: string, is24Hour: boolean = true): string {
+export function formatTime(
+  dateString: string,
+  is24Hour: boolean = true,
+): string {
   const date = new Date(dateString);
   return new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
@@ -139,7 +151,7 @@ export function calculateActivityStats(activities: StravaActivity[]) {
   const totalTime = activities.reduce((sum, a) => sum + a.moving_time, 0);
   const totalElevation = activities.reduce(
     (sum, a) => sum + a.total_elevation_gain,
-    0
+    0,
   );
 
   return {
@@ -147,11 +159,11 @@ export function calculateActivityStats(activities: StravaActivity[]) {
     totalTime: formatDuration(totalTime),
     totalElevation: formatElevation(totalElevation),
     count: activities.length,
-    avgDistance: activities.length > 0 
-      ? formatDistance(totalDistance / activities.length) 
-      : "—",
-    avgSpeed: activities.length > 0 
-      ? formatSpeed(totalDistance, totalTime) 
-      : "—",
+    avgDistance:
+      activities.length > 0
+        ? formatDistance(totalDistance / activities.length)
+        : "—",
+    avgSpeed:
+      activities.length > 0 ? formatSpeed(totalDistance, totalTime) : "—",
   };
 }

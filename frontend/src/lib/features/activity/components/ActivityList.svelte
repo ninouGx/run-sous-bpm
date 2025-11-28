@@ -1,8 +1,10 @@
 <script lang="ts">
   import type {
     ActivityStream,
+    ActivityStreamPoint,
     StravaActivity,
-    TrackWithTimestamp,
+    ActivityMusicResponse,
+    MusicSegment,
   } from "$lib/shared/api/types";
   import ActivityCard from "./ActivityCard.svelte";
   import { Button } from "$lib/components/ui/button";
@@ -23,11 +25,71 @@
   // Track which activity is currently expanded (only one at a time)
   let expandedActivityId = $state<string | null>(null);
 
-  let musicByActivity = $state<Record<string, TrackWithTimestamp[]>>({});
+  // Store full music segment data from new API
+  let musicSegmentsByActivity = $state<Record<string, ActivityMusicResponse>>(
+    {}
+  );
   let isLoadingMusicForActivity = $state<string | null>(null);
 
   let activityStreamsCache = $state<Record<string, ActivityStream>>({});
-  let isLoadingStreamsForActivity = $state<string | null>(null);
+
+  // TODO: Remove this temporary adapter once UI is updated to use segments directly
+  function extractTracksFromSegments(segments: MusicSegment[]) {
+    return segments
+      .filter((segment) => segment.track)
+      .map((segment) => ({
+        played_at: segment.start_time,
+        track_name: segment.track!.track_name,
+        artist_name: segment.track!.artist_name,
+        album_name: segment.track?.album_name,
+        track_id: segment.track!.id,
+        listen_id: segment.track!.id, // Using track ID as listen ID for now
+      }));
+  }
+
+  // Flatten all GPS points from segments into a single ActivityStream array
+  function flattenSegmentPointsToStream(
+    activityId: string,
+    segments: MusicSegment[]
+  ): ActivityStream {
+    const allPoints: ActivityStreamPoint[] = [];
+
+    for (const segment of segments) {
+      for (const point of segment.points) {
+        // Validate GPS coordinates before adding to map
+        if (
+          typeof point.latitude === 'number' &&
+          typeof point.longitude === 'number' &&
+          !isNaN(point.latitude) &&
+          !isNaN(point.longitude) &&
+          Math.abs(point.latitude) <= 90 &&
+          Math.abs(point.longitude) <= 180
+        ) {
+          allPoints.push({
+            activity_id: activityId,
+            time: point.time,
+            distance: 0, // Not available in segments, not critical for map
+            latitude: point.latitude,
+            longitude: point.longitude,
+            altitude: point.altitude ?? 0,
+            velocity: point.velocity ?? 0,
+            heart_rate: point.heart_rate ?? null,
+            cadence: point.cadence ?? null,
+            watts: point.watts ?? null,
+            temperature: null, // Not available in segments
+          });
+        } else {
+          console.warn('Invalid GPS point filtered out:', {
+            segment: segment.index,
+            lat: point.latitude,
+            lng: point.longitude
+          });
+        }
+      }
+    }
+
+    return allPoints;
+  }
 
   async function handleToggle(activity: StravaActivity) {
     const activityId = activity.id;
@@ -37,34 +99,46 @@
     } else {
       expandedActivityId = activityId; // Expand this one
 
-      // Fetch music data if not already loaded
-      if (!musicByActivity[activityId]) {
+      // Fetch music data if not already loaded (includes GPS points)
+      if (!musicSegmentsByActivity[activityId]) {
         isLoadingMusicForActivity = activityId;
         try {
           const response =
             await activityMusicService.getActivityMusic(activityId);
-          musicByActivity[activityId] = response.tracks;
+          musicSegmentsByActivity[activityId] = response;
+
+          // Extract GPS stream from segments instead of making separate API call
+          activityStreamsCache[activityId] = flattenSegmentPointsToStream(
+            activityId,
+            response.segments
+          );
+
+          console.log("Activity music segments loaded:", {
+            activity_id: response.activity_id,
+            has_gps: response.has_gps,
+            segments: response.segments.length,
+            gps_points: activityStreamsCache[activityId].length,
+            stats: response.stats,
+          });
         } catch (error: unknown) {
           toast.error("Failed to load music data for this activity");
-          musicByActivity[activityId] = []; // Set empty array to prevent retrying
-        } finally {
-          isLoadingMusicForActivity = null;
-        }
-      }
-
-      // Fetch activity streams if not already loaded
-      if (!activityStreamsCache[activityId]) {
-        isLoadingStreamsForActivity = activityId;
-        try {
-          const streams =
-            await activitiesService.getActivityStreams(activityId);
-
-          activityStreamsCache[activityId] = streams;
-        } catch (syncError: unknown) {
-          toast.error("Failed to sync activity data from Strava");
+          // Set empty response to prevent retrying
+          musicSegmentsByActivity[activityId] = {
+            activity_id: activityId,
+            has_gps: false,
+            segments: [],
+            stats: {
+              total_segments: 0,
+              segments_with_music: 0,
+              segments_without_music: 0,
+              original_points: 0,
+              simplified_points: 0,
+              reduction_ratio: 0,
+            },
+          };
           activityStreamsCache[activityId] = [];
         } finally {
-          isLoadingStreamsForActivity = null;
+          isLoadingMusicForActivity = null;
         }
       }
     }
@@ -116,8 +190,12 @@
         <ActivityCard
           {activity}
           activityStream={activityStreamsCache[activity.id] ?? []}
-          isLoadingActivityStream={isLoadingStreamsForActivity === activity.id}
-          musics={musicByActivity[activity.id] ?? []}
+          isLoadingActivityStream={isLoadingMusicForActivity === activity.id}
+          musics={musicSegmentsByActivity[activity.id]
+            ? extractTracksFromSegments(
+                musicSegmentsByActivity[activity.id].segments
+              )
+            : []}
           isLoadingMusic={isLoadingMusicForActivity === activity.id}
           isExpanded={expandedActivityId === activity.id}
           onToggle={() => handleToggle(activity)}

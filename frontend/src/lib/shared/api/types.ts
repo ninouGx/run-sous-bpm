@@ -52,6 +52,14 @@ export interface StravaActivity {
 }
 
 // Music types
+export interface TrackInfo {
+  id: string;
+  track_name: string;
+  artist_name: string;
+  album_name?: string;
+}
+
+// TODO: Remove this compatibility type once UI is updated to use segments directly
 export interface TrackWithTimestamp {
   played_at: string;
   track_name: string;
@@ -61,9 +69,39 @@ export interface TrackWithTimestamp {
   listen_id: string;
 }
 
+export interface GpsPoint {
+  time: string;
+  latitude: number;
+  longitude: number;
+  altitude?: number;
+  heart_rate?: number;
+  cadence?: number;
+  watts?: number;
+  velocity?: number;
+}
+
+export interface MusicSegment {
+  index: number;
+  track?: TrackInfo;
+  start_time: string;
+  end_time: string;
+  points: GpsPoint[];
+}
+
+export interface SimplificationStats {
+  total_segments: number;
+  segments_with_music: number;
+  segments_without_music: number;
+  original_points: number;
+  simplified_points: number;
+  reduction_ratio: number;
+}
+
 export interface ActivityMusicResponse {
-  tracks: TrackWithTimestamp[];
-  total_tracks: number;
+  activity_id: string;
+  has_gps: boolean;
+  segments: MusicSegment[];
+  stats: SimplificationStats;
 }
 
 export interface ActivityStreamPoint {

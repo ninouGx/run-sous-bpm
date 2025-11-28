@@ -12,7 +12,6 @@
     formatActivityDate,
     formatTime,
   } from "../utils/activity-formatters";
-  import { simplifyRoute } from "../utils/route-simplification";
   import { ChevronDown, ChevronUp } from "@lucide/svelte";
   import type { Map } from "maplibre-gl";
 
@@ -97,15 +96,11 @@
   });
 
   let simplifiedStream = $derived.by(() => {
-    const validPoints = activityStream.filter(
+    // Backend handles simplification via ?simplify=true query param
+    // Just filter for valid GPS coordinates
+    return activityStream.filter(
       (point) => point.latitude && point.longitude
     );
-
-    if (validPoints.length > 500) {
-      return simplifyRoute(validPoints, 0.00005);
-    }
-
-    return validPoints;
   });
 
   let routeGeoJSON = $derived({
