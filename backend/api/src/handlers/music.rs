@@ -16,14 +16,27 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 use crate::{
-    responses::{ActivityMusicResponse, LastFmRangeResponse, LastFmTrackInfo, TrackWithTimestamp},
+    responses::{
+        ActivityMusicResponse, GpsPointResponse, LastFmRangeResponse, LastFmTrackInfo,
+        SegmentResponse, SimplificationStats, TrackInfo,
+    },
     AppState,
 };
+
+/// Query parameters for activity music endpoint
+#[derive(Debug, Deserialize)]
+pub struct SimplificationQuery {
+    /// Whether to apply GPS simplification
+    pub simplify: Option<bool>,
+    /// Simplification tolerance in meters (default: 10.0)
+    pub tolerance: Option<f64>,
+}
 
 pub async fn get_activity_music(
     State(state): State<Arc<AppState>>,
     auth_session: AuthSession<AuthBackend>,
     Path(activity_id): Path<String>,
+    Query(params): Query<SimplificationQuery>,
 ) -> (StatusCode, Json<Value>) {
     let Some(user) = auth_session.user else {
         return (
@@ -41,23 +54,69 @@ pub async fn get_activity_music(
             })),
         );
     };
-    match analytics_service::get_activity_music(&state.db_connection, user.id, activity_id).await {
-        Ok(listens_with_tracks) => {
-            let tracks: Vec<TrackWithTimestamp> = listens_with_tracks
+    match analytics_service::get_activity_music(
+        &state.db_connection,
+        user.id,
+        activity_id,
+        params.simplify.unwrap_or(true),
+        params.tolerance,
+    )
+    .await
+    {
+        Ok((segments, simplification_stats)) => {
+            // Convert service layer Segment to API SegmentResponse
+            let segment_responses: Vec<SegmentResponse> = segments
                 .into_iter()
-                .map(|(listen, track)| TrackWithTimestamp {
-                    played_at: listen.played_at,
-                    track_name: track.track_name,
-                    artist_name: track.artist_name,
-                    album_name: track.album_name,
-                    track_id: track.id,
-                    listen_id: listen.id,
+                .map(|segment| {
+                    let track = segment.track.map(|t| TrackInfo {
+                        id: t.id,
+                        track_name: t.track_name,
+                        artist_name: t.artist_name,
+                        album_name: t.album_name,
+                    });
+
+                    let points: Vec<GpsPointResponse> = segment
+                        .points
+                        .into_iter()
+                        .filter_map(|p| match (p.latitude, p.longitude) {
+                            (Some(lat), Some(lng)) => Some(GpsPointResponse {
+                                time: p.time.with_timezone(&chrono::Utc),
+                                latitude: lat,
+                                longitude: lng,
+                                altitude: p.altitude,
+                                heart_rate: p.heart_rate,
+                                cadence: p.cadence,
+                                watts: p.watts,
+                                velocity: p.velocity,
+                            }),
+                            _ => None,
+                        })
+                        .collect();
+
+                    SegmentResponse {
+                        index: segment.index,
+                        track,
+                        start_time: segment.start_time,
+                        end_time: segment.end_time,
+                        points,
+                    }
                 })
                 .collect();
 
+            let has_gps = segment_responses.iter().any(|s| !s.points.is_empty());
+
             let response = ActivityMusicResponse {
-                total_tracks: tracks.len(),
-                tracks,
+                activity_id,
+                has_gps,
+                segments: segment_responses,
+                stats: SimplificationStats {
+                    total_segments: simplification_stats.total_segments,
+                    segments_with_music: simplification_stats.segments_with_music,
+                    segments_without_music: simplification_stats.segments_without_music,
+                    original_points: simplification_stats.original_points,
+                    simplified_points: simplification_stats.simplified_points,
+                    reduction_ratio: simplification_stats.reduction_ratio,
+                },
             };
 
             (StatusCode::OK, Json(json!(response)))
