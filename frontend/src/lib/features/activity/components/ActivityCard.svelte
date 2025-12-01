@@ -20,6 +20,8 @@
   import { getTrackColor, getTrackColorWithAlpha } from "../utils/track-colors";
   import { createRouteGeoJSON, calculateBounds } from "../utils/geoJsonTransformers";
   import { createTimelineRefs, scrollToTimelineItem } from "../utils/timeline-refs";
+  import { createMapInteractionState } from "../state/mapInteractionState.svelte";
+  import { createMapLifecycleState } from "../state/mapLifecycleState.svelte";
 
   interface Props {
     activity: StravaActivity;
@@ -43,14 +45,12 @@
     onToggle,
   }: Props = $props();
 
-  // Lazy-loaded MapLibre components
-  let MapLibre: any = $state(null);
-  let NavigationControl: any = $state(null);
-  let ScaleControl: any = $state(null);
-  let GeoJSONSource: any = $state(null);
-  let LineLayer: any = $state(null);
-  let FeatureState: any = $state(null);
-  let mapComponentsLoaded = $state(false);
+  // Map container ref (needed for interaction state)
+  let mapContainer = $state<HTMLDivElement | undefined>(undefined);
+
+  // State management modules
+  const lifecycle = createMapLifecycleState();
+  const interactionState = createMapInteractionState(segments, mapContainer);
 
   function extractTracksFromSegments(segments: MusicSegment[]) {
     return segments
@@ -75,95 +75,31 @@
 
   // Lazy load MapLibre components when expanded
   $effect(() => {
-    if (isExpanded && !mapComponentsLoaded) {
-      import("svelte-maplibre-gl").then((module) => {
-        MapLibre = module.MapLibre;
-        NavigationControl = module.NavigationControl;
-        ScaleControl = module.ScaleControl;
-        GeoJSONSource = module.GeoJSONSource;
-        LineLayer = module.LineLayer;
-        FeatureState = module.FeatureState;
-        mapComponentsLoaded = true;
-      });
+    if (isExpanded && !lifecycle.componentsLoaded) {
+      lifecycle.loadComponents();
     }
   });
 
-  let map = $state<Map>();
-  let isMapStyleLoaded = $state(false);
-  let mapContainer = $state<HTMLDivElement | undefined>(undefined);
-
   // Cleanup map instance when collapsed
   $effect(() => {
-    if (!isExpanded && map) {
-      try {
-        map.remove();
-      } catch (e) {
-        // Map already removed, ignore
-      }
-      map = undefined;
-      isMapStyleLoaded = false;
-      mapComponentsLoaded = false;
+    if (!isExpanded && lifecycle.map) {
+      lifecycle.cleanup();
     }
   });
 
   // Cleanup on component unmount
   $effect(() => {
     return () => {
-      if (map) {
-        try {
-          map.remove();
-        } catch (e) {
-          // Map already removed, ignore
-        }
-      }
+      lifecycle.cleanup();
     };
   });
-
-  // Track hovered feature for map interactions
-  let hoveredFeature = $state<MapGeoJSONFeature | undefined>(undefined);
-  let hoveredTrackSegmentId = $state<string | null>(null);
-  let selectedTrackSegmentId = $state<string | null>(null);
-  let tooltipData = $state<{
-    trackName: string;
-    artistName: string;
-    x: number;
-    y: number;
-  } | null>(null);
 
   // Timeline refs management
   const { bindTimelineItemRef, timelineItemRefs } = createTimelineRefs();
 
-  // Computed tooltip data that prioritizes hover over selection
-  let displayedTooltipData = $derived.by(() => {
-    // Priority 1: Show hover tooltip if available
-    if (tooltipData) {
-      return tooltipData;
-    }
-
-    // Priority 2: Show selected segment tooltip at fixed position
-    if (selectedTrackSegmentId !== null && mapContainer) {
-      const segmentIndex = parseInt(selectedTrackSegmentId);
-      const segment = segments[segmentIndex];
-
-      // Only show if track info exists
-      if (segment?.track?.track_name && segment?.track?.artist_name) {
-        const containerWidth = mapContainer.clientWidth;
-        return {
-          trackName: segment.track.track_name,
-          artistName: segment.track.artist_name,
-          x: containerWidth / 2,
-          y: 60,
-        };
-      }
-    }
-
-    // No tooltip
-    return null;
-  });
-
   // Autoscroll to selected timeline item
   $effect(() => {
-    scrollToTimelineItem(timelineItemRefs, selectedTrackSegmentId);
+    scrollToTimelineItem(timelineItemRefs, interactionState.selectedSegmentId);
   });
 
   // Generate GeoJSON for route visualization
@@ -173,22 +109,22 @@
   let bounds = $derived(calculateBounds(activityStream));
 
   function handleLoad(e: { target: Map }) {
-    map = e.target;
+    lifecycle.map = e.target;
 
-    if (map.isStyleLoaded()) {
-      isMapStyleLoaded = true;
+    if (lifecycle.map.isStyleLoaded()) {
+      lifecycle.isMapStyleLoaded = true;
       fitMapBounds();
     } else {
-      map.once("styledata", () => {
-        isMapStyleLoaded = true;
+      lifecycle.map.once("styledata", () => {
+        lifecycle.isMapStyleLoaded = true;
         fitMapBounds();
       });
     }
   }
 
   function fitMapBounds() {
-    if (map && bounds) {
-      map.fitBounds(
+    if (lifecycle.map && bounds) {
+      lifecycle.map.fitBounds(
         [
           [bounds.minLng, bounds.minLat],
           [bounds.maxLng, bounds.maxLat],
@@ -241,7 +177,14 @@
                 <p class="text-sm text-muted-foreground">Loading map...</p>
               </div>
             {:else if activityStream.length > 0}
-              {#if mapComponentsLoaded && MapLibre}
+              {#if lifecycle.componentsLoaded && lifecycle.MapLibre}
+                {@const MapLibre = lifecycle.MapLibre}
+                {@const NavigationControl = lifecycle.NavigationControl}
+                {@const ScaleControl = lifecycle.ScaleControl}
+                {@const GeoJSONSource = lifecycle.GeoJSONSource}
+                {@const LineLayer = lifecycle.LineLayer}
+                {@const FeatureState = lifecycle.FeatureState}
+
                 <MapLibre
                   class="h-[55vh] min-h-[300px] w-full"
                   style="https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json"
@@ -254,7 +197,7 @@
                   onclick={(e: { features?: MapGeoJSONFeature[] }) => {
                     // Deselect when clicking empty map space
                     if (!e.features || e.features.length === 0) {
-                      selectedTrackSegmentId = null;
+                      interactionState.selectedSegmentId = null;
                     }
                   }}
                   center={{
@@ -265,7 +208,7 @@
                   <NavigationControl />
                   <ScaleControl />
 
-                  {#if isMapStyleLoaded}
+                  {#if lifecycle.isMapStyleLoaded}
                     <GeoJSONSource
                       id="route"
                       data={routeGeoJSONCollection}
@@ -285,12 +228,8 @@
                             const props = feature.properties;
                             const segmentId = props?.segment_id?.toString() ?? null;
 
-                            // Toggle selection: if clicking same segment, deselect
-                            if (selectedTrackSegmentId === segmentId) {
-                              selectedTrackSegmentId = null;
-                            } else {
-                              selectedTrackSegmentId = segmentId;
-                            }
+                            // Toggle selection using state module
+                            interactionState.selectSegment(segmentId);
                           }
                         }}
                         onmousemove={(e: {
@@ -301,27 +240,27 @@
                           const features = e.features;
                           if (features && features.length > 0) {
                             const feature = features[0];
-                            hoveredFeature = feature;
+                            interactionState.hoveredFeature = feature;
 
                             const props = feature.properties;
                             const segmentId = props?.segment_id;
-                            hoveredTrackSegmentId = segmentId?.toString() ?? null;
+                            interactionState.hoveredSegmentId = segmentId?.toString() ?? null;
 
                             // Show tooltip if track info exists
                             if (props?.track_name && props?.artist_name) {
-                              tooltipData = {
+                              interactionState.updateTooltip({
                                 trackName: props.track_name,
                                 artistName: props.artist_name,
                                 x: e.point.x,
                                 y: e.point.y,
-                              };
+                              });
                             }
                           }
                         }}
                         onmouseleave={() => {
-                          hoveredFeature = undefined;
-                          hoveredTrackSegmentId = null;
-                          tooltipData = null;
+                          interactionState.hoveredFeature = undefined;
+                          interactionState.hoveredSegmentId = null;
+                          interactionState.updateTooltip(null);
                         }}
                         paint={{
                           "line-color": ["get", "color"],
@@ -410,25 +349,25 @@
                       />
 
                       <!-- Declarative hover state management -->
-                      {#if hoveredFeature && hoveredFeature.id !== undefined}
+                      {#if interactionState.hoveredFeature && interactionState.hoveredFeature.id !== undefined}
                         <FeatureState
                           source="route"
-                          id={hoveredFeature.id}
+                          id={interactionState.hoveredFeature.id}
                           state={{ hover: true }}
                         />
-                      {:else if hoveredTrackSegmentId !== null}
+                      {:else if interactionState.hoveredSegmentId !== null}
                         <FeatureState
                           source="route"
-                          id={parseInt(hoveredTrackSegmentId)}
+                          id={parseInt(interactionState.hoveredSegmentId)}
                           state={{ hover: true }}
                         />
                       {/if}
 
                       <!-- Declarative selected state management -->
-                      {#if selectedTrackSegmentId !== null}
+                      {#if interactionState.selectedSegmentId !== null}
                         <FeatureState
                           source="route"
-                          id={parseInt(selectedTrackSegmentId)}
+                          id={parseInt(interactionState.selectedSegmentId)}
                           state={{ selected: true }}
                         />
                       {/if}
@@ -436,12 +375,12 @@
                   {/if}
 
                   <!-- Tooltip for hover or selected -->
-                  {#if displayedTooltipData}
+                  {#if interactionState.displayedTooltip}
                     <MapTooltip
-                      trackName={displayedTooltipData.trackName}
-                      artistName={displayedTooltipData.artistName}
-                      x={displayedTooltipData.x}
-                      y={displayedTooltipData.y}
+                      trackName={interactionState.displayedTooltip.trackName}
+                      artistName={interactionState.displayedTooltip.artistName}
+                      x={interactionState.displayedTooltip.x}
+                      y={interactionState.displayedTooltip.y}
                     />
                   {/if}
                 </MapLibre>
@@ -486,9 +425,9 @@
                     (seg) => seg.track?.id === track.track_id
                   )}
                   {@const isHovered =
-                    hoveredTrackSegmentId === segmentIndex.toString()}
+                    interactionState.hoveredSegmentId === segmentIndex.toString()}
                   {@const isSelected =
-                    selectedTrackSegmentId === segmentIndex.toString()}
+                    interactionState.selectedSegmentId === segmentIndex.toString()}
                   {@const segmentId = segmentIndex.toString()}
 
                   <div
@@ -499,30 +438,18 @@
                     tabindex="0"
                     use:bindTimelineItemRef={segmentId}
                     onclick={() => {
-                      const segmentId = segmentIndex.toString();
-                      // Toggle selection: if clicking same segment, deselect
-                      if (selectedTrackSegmentId === segmentId) {
-                        selectedTrackSegmentId = null;
-                      } else {
-                        selectedTrackSegmentId = segmentId;
-                      }
+                      interactionState.selectSegment(segmentIndex.toString());
                     }}
                     onmouseenter={() =>
-                      (hoveredTrackSegmentId = segmentIndex.toString())}
-                    onmouseleave={() => (hoveredTrackSegmentId = null)}
+                      interactionState.hoverSegment(segmentIndex.toString())}
+                    onmouseleave={() => interactionState.hoverSegment(null)}
                     onfocus={() =>
-                      (hoveredTrackSegmentId = segmentIndex.toString())}
-                    onblur={() => (hoveredTrackSegmentId = null)}
+                      interactionState.hoverSegment(segmentIndex.toString())}
+                    onblur={() => interactionState.hoverSegment(null)}
                     onkeydown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         e.preventDefault();
-                        const segmentId = segmentIndex.toString();
-                        // Toggle selection: if clicking same segment, deselect
-                        if (selectedTrackSegmentId === segmentId) {
-                          selectedTrackSegmentId = null;
-                        } else {
-                          selectedTrackSegmentId = segmentId;
-                        }
+                        interactionState.selectSegment(segmentIndex.toString());
                       } else if (e.key === "ArrowDown") {
                         e.preventDefault();
                         const next = e.currentTarget
