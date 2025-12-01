@@ -18,8 +18,14 @@
   import MapTooltip from "./MapTooltip.svelte";
   import type { MapGeoJSONFeature } from "maplibre-gl";
   import { getTrackColor, getTrackColorWithAlpha } from "../utils/track-colors";
-  import { createRouteGeoJSON, calculateBounds } from "../utils/geoJsonTransformers";
-  import { createTimelineRefs, scrollToTimelineItem } from "../utils/timeline-refs";
+  import {
+    createRouteGeoJSON,
+    calculateBounds,
+  } from "../utils/geoJsonTransformers";
+  import {
+    createTimelineRefs,
+    scrollToTimelineItem,
+  } from "../utils/timeline-refs";
   import { createMapInteractionState } from "../state/mapInteractionState.svelte";
   import { createMapLifecycleState } from "../state/mapLifecycleState.svelte";
 
@@ -45,12 +51,40 @@
     onToggle,
   }: Props = $props();
 
-  // Map container ref (needed for interaction state)
+  // Map container ref (needed for tooltip positioning)
   let mapContainer = $state<HTMLDivElement | undefined>(undefined);
 
   // State management modules
   const lifecycle = createMapLifecycleState();
-  const interactionState = createMapInteractionState(segments, mapContainer);
+  const interactionState = createMapInteractionState();
+
+  // Computed tooltip data that prioritizes hover over selection
+  let displayedTooltipData = $derived.by(() => {
+    // Priority 1: Show hover tooltip if available
+    if (interactionState.tooltipData) {
+      return interactionState.tooltipData;
+    }
+
+    // Priority 2: Show selected segment tooltip at fixed position
+    if (interactionState.selectedSegmentId !== null && mapContainer) {
+      const segmentIndex = parseInt(interactionState.selectedSegmentId);
+      const segment = segments[segmentIndex];
+
+      // Only show if track info exists
+      if (segment?.track?.track_name && segment?.track?.artist_name) {
+        const containerWidth = mapContainer.clientWidth;
+        return {
+          trackName: segment.track.track_name,
+          artistName: segment.track.artist_name,
+          x: containerWidth / 2,
+          y: 60,
+        };
+      }
+    }
+
+    // No tooltip
+    return null;
+  });
 
   function extractTracksFromSegments(segments: MusicSegment[]) {
     return segments
@@ -169,7 +203,10 @@
       <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
         <!-- Left: Map Placeholder (60% width = 3/5) -->
         <div class="md:col-span-3">
-          <div class="rounded-lg border overflow-hidden" bind:this={mapContainer}>
+          <div
+            class="rounded-lg border overflow-hidden"
+            bind:this={mapContainer}
+          >
             {#if isLoadingActivityStream}
               <div
                 class="h-[55vh] min-h-[300px] w-full flex items-center justify-center bg-muted"
@@ -226,7 +263,8 @@
                           if (features && features.length > 0) {
                             const feature = features[0];
                             const props = feature.properties;
-                            const segmentId = props?.segment_id?.toString() ?? null;
+                            const segmentId =
+                              props?.segment_id?.toString() ?? null;
 
                             // Toggle selection using state module
                             interactionState.selectSegment(segmentId);
@@ -244,7 +282,8 @@
 
                             const props = feature.properties;
                             const segmentId = props?.segment_id;
-                            interactionState.hoveredSegmentId = segmentId?.toString() ?? null;
+                            interactionState.hoveredSegmentId =
+                              segmentId?.toString() ?? null;
 
                             // Show tooltip if track info exists
                             if (props?.track_name && props?.artist_name) {
@@ -375,12 +414,12 @@
                   {/if}
 
                   <!-- Tooltip for hover or selected -->
-                  {#if interactionState.displayedTooltip}
+                  {#if displayedTooltipData}
                     <MapTooltip
-                      trackName={interactionState.displayedTooltip.trackName}
-                      artistName={interactionState.displayedTooltip.artistName}
-                      x={interactionState.displayedTooltip.x}
-                      y={interactionState.displayedTooltip.y}
+                      trackName={displayedTooltipData.trackName}
+                      artistName={displayedTooltipData.artistName}
+                      x={displayedTooltipData.x}
+                      y={displayedTooltipData.y}
                     />
                   {/if}
                 </MapLibre>
@@ -425,15 +464,19 @@
                     (seg) => seg.track?.id === track.track_id
                   )}
                   {@const isHovered =
-                    interactionState.hoveredSegmentId === segmentIndex.toString()}
+                    interactionState.hoveredSegmentId ===
+                    segmentIndex.toString()}
                   {@const isSelected =
-                    interactionState.selectedSegmentId === segmentIndex.toString()}
+                    interactionState.selectedSegmentId ===
+                    segmentIndex.toString()}
                   {@const segmentId = segmentIndex.toString()}
 
                   <div
                     class="flex items-start gap-3 rounded-md px-3 py-2 transition-colors cursor-pointer
                            focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                           {isHovered || isSelected ? 'bg-accent' : 'hover:bg-accent/50'}"
+                           {isHovered || isSelected
+                      ? 'bg-accent'
+                      : 'hover:bg-accent/50'}"
                     role="button"
                     tabindex="0"
                     use:bindTimelineItemRef={segmentId}

@@ -19,29 +19,24 @@ export interface TooltipData {
 
 /**
  * Creates a reactive state object for managing map and timeline interactions.
- * Uses Svelte 5 runes ($state, $derived) for fine-grained reactivity.
+ * Uses Svelte 5 runes ($state) for fine-grained reactivity.
  *
- * @param segments - Music segments for tooltip data lookup
- * @param mapContainer - Map container element for positioning tooltips
  * @returns State object with getters, setters, and methods
  *
  * @example
  * ```svelte
  * <script>
- *   const interactionState = createMapInteractionState(segments, mapContainer);
+ *   const interactionState = createMapInteractionState();
  *
  *   // Select a segment
  *   interactionState.selectSegment('2');
  *
- *   // Access tooltip data
- *   const tooltip = interactionState.displayedTooltip;
+ *   // Access hover tooltip data
+ *   const tooltip = interactionState.tooltipData;
  * </script>
  * ```
  */
-export function createMapInteractionState(
-  segments: MusicSegment[],
-  mapContainer: HTMLDivElement | undefined,
-) {
+export function createMapInteractionState() {
   // Hover state
   let hoveredFeature = $state<MapGeoJSONFeature | undefined>(undefined);
   let hoveredSegmentId = $state<string | null>(null);
@@ -51,37 +46,6 @@ export function createMapInteractionState(
 
   // Tooltip state (for hover)
   let tooltipData = $state<TooltipData | null>(null);
-
-  /**
-   * Computed tooltip data that prioritizes hover over selection.
-   * Shows hover tooltip immediately, or selected segment tooltip at fixed position.
-   */
-  const displayedTooltip = $derived.by(() => {
-    // Priority 1: Show hover tooltip if available
-    if (tooltipData) {
-      return tooltipData;
-    }
-
-    // Priority 2: Show selected segment tooltip at fixed position
-    if (selectedSegmentId !== null && mapContainer) {
-      const segmentIndex = parseInt(selectedSegmentId);
-      const segment = segments[segmentIndex];
-
-      // Only show if track info exists
-      if (segment?.track?.track_name && segment?.track?.artist_name) {
-        const containerWidth = mapContainer.clientWidth;
-        return {
-          trackName: segment.track.track_name,
-          artistName: segment.track.artist_name,
-          x: containerWidth / 2,
-          y: 60,
-        };
-      }
-    }
-
-    // No tooltip
-    return null;
-  });
 
   return {
     // Hover state
@@ -113,11 +77,6 @@ export function createMapInteractionState(
     },
     set tooltipData(value) {
       tooltipData = value;
-    },
-
-    // Computed tooltip (read-only)
-    get displayedTooltip() {
-      return displayedTooltip;
     },
 
     /**
