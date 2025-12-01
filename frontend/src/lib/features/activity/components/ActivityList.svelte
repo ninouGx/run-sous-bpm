@@ -33,7 +33,6 @@
 
   let activityStreamsCache = $state<Record<string, ActivityStream>>({});
 
-  // TODO: Remove this temporary adapter once UI is updated to use segments directly
   function extractTracksFromSegments(segments: MusicSegment[]) {
     return segments
       .filter((segment) => segment.track)
@@ -58,8 +57,8 @@
       for (const point of segment.points) {
         // Validate GPS coordinates before adding to map
         if (
-          typeof point.latitude === 'number' &&
-          typeof point.longitude === 'number' &&
+          typeof point.latitude === "number" &&
+          typeof point.longitude === "number" &&
           !isNaN(point.latitude) &&
           !isNaN(point.longitude) &&
           Math.abs(point.latitude) <= 90 &&
@@ -79,10 +78,10 @@
             temperature: null, // Not available in segments
           });
         } else {
-          console.warn('Invalid GPS point filtered out:', {
+          console.warn("Invalid GPS point filtered out:", {
             segment: segment.index,
             lat: point.latitude,
-            lng: point.longitude
+            lng: point.longitude,
           });
         }
       }
@@ -107,7 +106,6 @@
             await activityMusicService.getActivityMusic(activityId);
           musicSegmentsByActivity[activityId] = response;
 
-          // Extract GPS stream from segments instead of making separate API call
           activityStreamsCache[activityId] = flattenSegmentPointsToStream(
             activityId,
             response.segments
@@ -196,6 +194,7 @@
                 musicSegmentsByActivity[activity.id].segments
               )
             : []}
+          segments={musicSegmentsByActivity[activity.id]?.segments ?? []}
           isLoadingMusic={isLoadingMusicForActivity === activity.id}
           isExpanded={expandedActivityId === activity.id}
           onToggle={() => handleToggle(activity)}

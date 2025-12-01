@@ -11,13 +11,11 @@
     formatDistance,
     formatDuration,
     formatActivityDate,
-    formatTime,
   } from "../utils/activity-formatters";
   import { ChevronDown, ChevronUp } from "@lucide/svelte";
   import type { Map } from "maplibre-gl";
   import MapTooltip from "./MapTooltip.svelte";
   import type { MapGeoJSONFeature } from "maplibre-gl";
-  import { getTrackColor, getTrackColorWithAlpha } from "../utils/track-colors";
   import {
     createRouteGeoJSON,
     calculateBounds,
@@ -28,6 +26,7 @@
   } from "../utils/timeline-refs";
   import { createMapInteractionState } from "../state/mapInteractionState.svelte";
   import { createMapLifecycleState } from "../state/mapLifecycleState.svelte";
+  import MusicTimeline from "./timeline/MusicTimeline.svelte";
 
   interface Props {
     activity: StravaActivity;
@@ -446,98 +445,13 @@
 
         <!-- Right: Music Timeline (40% width = 2/5) -->
         <div class="md:col-span-2">
-          <div class="space-y-3">
-            <div class="flex items-center gap-2 mb-4">
-              <h4 class="font-semibold text-sm">🎵 Music Timeline</h4>
-            </div>
-
-            <div class="space-y-2 max-h-96 overflow-y-auto pr-2" role="list">
-              {#if isLoadingMusic}
-                <p class="text-sm text-muted-foreground">Loading music...</p>
-              {:else if sortedMusics.length === 0}
-                <p class="text-sm text-muted-foreground">
-                  No music data available for this activity.
-                </p>
-              {:else}
-                {#each sortedMusics as track}
-                  {@const segmentIndex = segments.findIndex(
-                    (seg) => seg.track?.id === track.track_id
-                  )}
-                  {@const isHovered =
-                    interactionState.hoveredSegmentId ===
-                    segmentIndex.toString()}
-                  {@const isSelected =
-                    interactionState.selectedSegmentId ===
-                    segmentIndex.toString()}
-                  {@const segmentId = segmentIndex.toString()}
-
-                  <div
-                    class="flex items-start gap-3 rounded-md px-3 py-2 transition-colors cursor-pointer
-                           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
-                           {isHovered || isSelected
-                      ? 'bg-accent'
-                      : 'hover:bg-accent/50'}"
-                    role="button"
-                    tabindex="0"
-                    use:bindTimelineItemRef={segmentId}
-                    onclick={() => {
-                      interactionState.selectSegment(segmentIndex.toString());
-                    }}
-                    onmouseenter={() =>
-                      interactionState.hoverSegment(segmentIndex.toString())}
-                    onmouseleave={() => interactionState.hoverSegment(null)}
-                    onfocus={() =>
-                      interactionState.hoverSegment(segmentIndex.toString())}
-                    onblur={() => interactionState.hoverSegment(null)}
-                    onkeydown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        interactionState.selectSegment(segmentIndex.toString());
-                      } else if (e.key === "ArrowDown") {
-                        e.preventDefault();
-                        const next = e.currentTarget
-                          .nextElementSibling as HTMLElement;
-                        next?.focus();
-                      } else if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        const prev = e.currentTarget
-                          .previousElementSibling as HTMLElement;
-                        prev?.focus();
-                      }
-                    }}
-                  >
-                    <!-- Color bar indicator -->
-                    <div
-                      class="w-1 rounded-full transition-all"
-                      style="
-                        background-color: {getTrackColor(segmentIndex)};
-                        height: {isHovered || isSelected ? '100%' : '50%'};
-                        min-height: {isHovered || isSelected ? '40px' : '24px'};
-                      "
-                    ></div>
-
-                    <div class="min-w-0 flex-1">
-                      <p class="font-medium truncate" title={track.track_name}>
-                        {track.track_name}
-                      </p>
-                      <p
-                        class="text-sm text-muted-foreground truncate"
-                        title={track.artist_name}
-                      >
-                        {track.artist_name}
-                      </p>
-                    </div>
-                    <p
-                      class="text-sm text-muted-foreground whitespace-nowrap flex-shrink-0"
-                      title={track.played_at}
-                    >
-                      {formatTime(track.played_at)}
-                    </p>
-                  </div>
-                {/each}
-              {/if}
-            </div>
-          </div>
+          <MusicTimeline
+            tracks={sortedMusics}
+            {segments}
+            isLoading={isLoadingMusic}
+            {interactionState}
+            {bindTimelineItemRef}
+          />
         </div>
       </div>
     </CardContent>
