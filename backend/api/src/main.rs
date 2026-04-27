@@ -17,6 +17,7 @@ use handlers::{
     register_user, root, sync_all_strava_activity_streams, sync_strava_activities,
     sync_strava_activity_streams,
 };
+use run_sous_bpm_core::config::read_secret;
 use run_sous_bpm_core::crypto::EncryptionService;
 use run_sous_bpm_core::{
     auth::AuthBackend, database::establish_db_connection, services::OAuthSessionManager,
@@ -59,6 +60,10 @@ struct AppState {
 async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
+    // Inject LAST_FM_API_KEY into process env so the lastfm-client crate can find it via env::var.
+    // The crate reads the key directly from env; this bridges the *_FILE pattern for Docker Secrets.
+    std::env::set_var("LAST_FM_API_KEY", read_secret("LAST_FM_API_KEY"));
+
     tracing_config::init_tracing();
 
     let oauth_session_store = Arc::new(OAuthSessionManager::new());
@@ -89,8 +94,20 @@ async fn main() -> anyhow::Result<()> {
         encryption_service,
     };
 
-    let redis_url =
-        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| {
+        let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let port = std::env::var("REDIS_PORT").unwrap_or_else(|_| "6379".to_string());
+        let password_opt = std::env::var("REDIS_PASSWORD_FILE")
+            .ok()
+            .and_then(|path| std::fs::read_to_string(path).ok())
+            .map(|s| s.trim_end().to_string())
+            .or_else(|| std::env::var("REDIS_PASSWORD").ok())
+            .filter(|p| !p.is_empty());
+        match password_opt {
+            Some(pwd) => format!("redis://:{pwd}@{host}:{port}"),
+            None => format!("redis://{host}:{port}"),
+        }
+    });
     let redis_config = Config::from_url(&redis_url).expect("Valid REDIS_URL");
     let redis_pool = Pool::new(redis_config, None, None, None, 6).expect("Redis pool creation");
     let _redis_conn = redis_pool.connect();

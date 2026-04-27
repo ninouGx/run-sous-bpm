@@ -1,7 +1,6 @@
 use dotenvy::dotenv;
 use oauth2::{AuthType, AuthUrl, ClientId, ClientSecret, RedirectUrl, Scope, TokenUrl};
 use serde::{Deserialize, Serialize};
-use std::env;
 use strum::{Display, EnumString};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Display, EnumString)]
@@ -25,7 +24,7 @@ pub struct ClientInfo {
 impl ClientInfo {
     fn retrieve_env_var(var_name: &str) -> String {
         dotenv().ok();
-        env::var(var_name).unwrap_or_else(|_| panic!("{var_name} must be set in .env file"))
+        super::secret::read_secret(var_name)
     }
 
     /// Creates OAuth client configuration from provider type

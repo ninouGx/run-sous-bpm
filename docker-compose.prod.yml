@@ -1,12 +1,15 @@
 services:
-  # One-shot migration runner — runs before backend starts
   migrator:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    env_file: .env
     environment:
-      DATABASE_URL: postgresql://run_sous_bpm:${DB_PASSWORD}@timescaledb:5432/run_sous_bpm
+      DB_USER: run_sous_bpm
+      DB_NAME: run_sous_bpm
+      DB_HOST: timescaledb
+      DB_PORT: "5432"
+      DB_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
     command: ["./migration"]
     depends_on:
       timescaledb:
@@ -19,13 +22,48 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    env_file: .env
     environment:
-      DATABASE_URL: postgresql://run_sous_bpm:${DB_PASSWORD}@timescaledb:5432/run_sous_bpm
-      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      # Public config
+      PORT: "3000"
+      HOST: https://runsousbpm.nils.galloux.net
+      FRONTEND_URL: https://runsousbpm.nils.galloux.net
+      REDIRECT_ENDPOINT: /api/oauth/callback
+      REDIRECT_URI: https://runsousbpm.nils.galloux.net/api/oauth/callback
       COOKIE_SECURE: "true"
-    volumes:
-      - ./encryption.key:/app/encryption.key:ro
+      # Database
+      DB_USER: run_sous_bpm
+      DB_NAME: run_sous_bpm
+      DB_HOST: timescaledb
+      DB_PORT: "5432"
+      DB_PASSWORD_FILE: /run/secrets/db_password
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_PASSWORD_FILE: /run/secrets/redis_password
+      # OAuth providers (IDs are not secrets)
+      STRAVA_CLIENT_ID: "170007"
+      STRAVA_BASE_URL: https://www.strava.com
+      STRAVA_AUTH_URL: https://www.strava.com/oauth/authorize
+      STRAVA_TOKEN_URL: https://www.strava.com/oauth/token
+      STRAVA_API_URL: https://www.strava.com/api/v3
+      STRAVA_CLIENT_SECRET_FILE: /run/secrets/strava_client_secret
+      SPOTIFY_CLIENT_ID: "32aa958787a24957bc5be12ba58d423d"
+      SPOTIFY_BASE_URL: https://accounts.spotify.com
+      SPOTIFY_AUTH_URL: https://accounts.spotify.com/authorize
+      SPOTIFY_TOKEN_URL: https://accounts.spotify.com/api/token
+      SPOTIFY_API_URL: https://api.spotify.com/v1
+      SPOTIFY_CLIENT_SECRET_FILE: /run/secrets/spotify_client_secret
+      # Last.fm
+      LAST_FM_API_KEY_FILE: /run/secrets/lastfm_api_key
+      # Token encryption key
+      ENCRYPTION_KEY_FILE: /run/secrets/encryption_key
+    secrets:
+      - db_password
+      - redis_password
+      - strava_client_secret
+      - spotify_client_secret
+      - lastfm_api_key
+      - encryption_key
     ports:
       - "127.0.0.1:3000:3000"
     depends_on:
@@ -47,7 +85,7 @@ services:
         VITE_API_URL: ""
     environment:
       PORT: "3001"
-      ORIGIN: ${FRONTEND_URL}
+      ORIGIN: https://runsousbpm.nils.galloux.net
     ports:
       - "127.0.0.1:3001:3001"
     depends_on:
@@ -60,8 +98,9 @@ services:
     image: timescale/timescaledb:latest-pg17
     environment:
       POSTGRES_USER: run_sous_bpm
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: run_sous_bpm
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
     volumes:
       - timescaledb_data:/var/lib/postgresql/data
     restart: unless-stopped
@@ -75,17 +114,39 @@ services:
 
   redis:
     image: redis:7-alpine
-    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    command:
+      - sh
+      - -c
+      - redis-server --appendonly yes --requirepass "$$(cat /run/secrets/redis_password)"
+    secrets: [redis_password]
     volumes:
       - redis_data:/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      test:
+        - CMD
+        - sh
+        - -c
+        - redis-cli -a "$$(cat /run/secrets/redis_password)" ping
       interval: 10s
       timeout: 5s
       retries: 3
     networks:
       - app-network
+
+secrets:
+  db_password:
+    file: /etc/run-sous-bpm/secrets/db_password
+  redis_password:
+    file: /etc/run-sous-bpm/secrets/redis_password
+  strava_client_secret:
+    file: /etc/run-sous-bpm/secrets/strava_client_secret
+  spotify_client_secret:
+    file: /etc/run-sous-bpm/secrets/spotify_client_secret
+  lastfm_api_key:
+    file: /etc/run-sous-bpm/secrets/lastfm_api_key
+  encryption_key:
+    file: /etc/run-sous-bpm/secrets/encryption_key
 
 networks:
   app-network:
