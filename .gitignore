@@ -5,7 +5,7 @@ target/
 debug/
 **/*.rs.bk
 *.pdb
-Cargo.lock
+# Cargo.lock is intentionally tracked (app, not lib)
 
 # ========================
 # Node.js / Frontend
@@ -15,7 +15,7 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
-package-lock.json
+# package-lock.json is intentionally tracked (deployed app)
 yarn.lock
 pnpm-lock.yaml
 
@@ -75,7 +75,6 @@ logs/
 # ========================
 # Docker
 # ========================
-.dockerignore
 
 # ========================
 # OS generated files
