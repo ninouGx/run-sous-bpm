@@ -1,0 +1,96 @@
+services:
+  # One-shot migration runner — runs before backend starts
+  migrator:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://run_sous_bpm:${DB_PASSWORD}@timescaledb:5432/run_sous_bpm
+    command: ["./migration"]
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    restart: "no"
+    networks:
+      - app-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://run_sous_bpm:${DB_PASSWORD}@timescaledb:5432/run_sous_bpm
+      REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
+      COOKIE_SECURE: "true"
+    volumes:
+      - ./encryption.key:/app/encryption.key:ro
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""
+    environment:
+      PORT: "3001"
+      ORIGIN: ${FRONTEND_URL}
+    ports:
+      - "127.0.0.1:3001:3001"
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - app-network
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    environment:
+      POSTGRES_USER: run_sous_bpm
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: run_sous_bpm
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U run_sous_bpm -d run_sous_bpm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  timescaledb_data:
+  redis_data:

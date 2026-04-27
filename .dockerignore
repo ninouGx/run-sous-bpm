@@ -1,0 +1,24 @@
+# Rust build artifacts
+backend/target/
+
+# Frontend build artifacts
+frontend/build/
+frontend/.svelte-kit/
+frontend/node_modules/
+
+# Dev secrets — never in image
+backend/.env
+.env
+*.key
+
+# Git
+.git/
+.gitignore
+
+# Docs
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
