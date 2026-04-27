@@ -27,20 +27,17 @@ pub async fn register_user(
         );
     }
 
-    // Check if email already exists
+    // Check if email already exists — return generic response to prevent email enumeration
     match get_user_by_email(&state.db_connection, payload.email.clone()).await {
         Ok(Some(_)) => {
             return (
-                StatusCode::CONFLICT,
+                StatusCode::CREATED,
                 Json(json!({
-                    "error": "Email already registered",
-                    "message": "An account with this email already exists"
+                    "message": "Registration submitted"
                 })),
             );
         }
-        Ok(None) => {
-            // Email is available, continue with registration
-        }
+        Ok(None) => {}
         Err(e) => {
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,

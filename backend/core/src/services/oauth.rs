@@ -59,11 +59,11 @@ pub fn start_oauth_flow(
         .url();
 
     let state = OAuthState {
-        pkce_verifier: pkce_verifier.secret().to_string(),
+        pkce_verifier: pkce_verifier.secret().clone(),
         provider,
         user_id,
     };
-    session_store.store(csrf_token.secret().to_string(), state);
+    session_store.store(csrf_token.secret().clone(), state);
     auth_url.to_string()
 }
 
@@ -254,7 +254,7 @@ pub async fn refresh_token(
     .await?;
 
     // Return the decrypted access token
-    Ok(token_result.access_token().secret().to_string())
+    Ok(token_result.access_token().secret().clone())
 }
 
 /// Checks if a user has connected an OAuth provider

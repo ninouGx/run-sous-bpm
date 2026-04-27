@@ -10,7 +10,7 @@ use axum::{
     routing::{get, patch, post},
     Router,
 };
-use axum_login::{login_required, tower_sessions::MemoryStore, AuthManagerLayerBuilder};
+use axum_login::{login_required, AuthManagerLayerBuilder};
 use handlers::{
     get_activity_music, get_current_user, get_strava_activities, get_strava_activity_streams,
     handler_404, health, login_user, logout_user, oauth_callback, oauth_process_callback,
@@ -26,16 +26,22 @@ use run_sous_bpm_integrations::{
     strava::StravaApiClient,
 };
 use sea_orm::DatabaseConnection;
+use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
+use tower_governor::{
+    governor::GovernorConfigBuilder, key_extractor::SmartIpKeyExtractor, GovernorLayer,
+};
 use tower_http::classify::ServerErrorsFailureClass;
+use tower_http::cors::AllowOrigin;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use tower_sessions::{
     cookie::{time, SameSite},
     Expiry, SessionManagerLayer,
 };
+use tower_sessions_redis_store::{fred::prelude::*, RedisStore};
 use tracing::{info, info_span, Span};
 
 use crate::handlers::{patch_user, remove_oauth_provider};
@@ -83,7 +89,17 @@ async fn main() -> anyhow::Result<()> {
         encryption_service,
     };
 
-    let session_store = MemoryStore::default();
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let redis_config = Config::from_url(&redis_url).expect("Valid REDIS_URL");
+    let redis_pool = Pool::new(redis_config, None, None, None, 6).expect("Redis pool creation");
+    let _redis_conn = redis_pool.connect();
+    redis_pool
+        .wait_for_connect()
+        .await
+        .expect("Redis connection failed — is Redis running?");
+    let session_store = RedisStore::new(redis_pool);
+    info!("Redis session store initialized");
 
     // Session configuration with security best practices
     // - HttpOnly: prevents JavaScript access to cookies (default in tower_sessions)
@@ -106,13 +122,14 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("REDIRECT_ENDPOINT").unwrap_or_else(|_| "/api/oauth/callback".to_string());
 
     let allowed_origin = std::env::var("FRONTEND_URL").expect("FRONTEND_URL must be set");
+    let allowed_header: HeaderValue = allowed_origin
+        .parse()
+        .expect("FRONTEND_URL must be a valid HTTP origin header value");
 
     let cors = CorsLayer::new()
-        .allow_origin(
-            allowed_origin
-                .parse::<HeaderValue>()
-                .expect("Invalid CORS origin"),
-        )
+        .allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _| {
+            *origin == allowed_header
+        }))
         .allow_credentials(true)
         .allow_methods([
             Method::GET,
@@ -127,12 +144,26 @@ async fn main() -> anyhow::Result<()> {
             axum::http::header::AUTHORIZATION,
         ]);
 
+    // Auth-specific rate limit: 5 attempts/minute, burst 5 (blocks brute-force on login/register)
+    let auth_rate_config = {
+        let mut b = GovernorConfigBuilder::default();
+        let mut b = b.key_extractor(SmartIpKeyExtractor);
+        b.per_second(12)
+            .burst_size(5)
+            .finish()
+            .expect("auth rate limiter config")
+    };
+
+    let auth_routes = Router::new()
+        .route("/api/auth/register", post(register_user))
+        .route("/api/auth/login", post(login_user))
+        .layer(GovernorLayer::new(auth_rate_config));
+
     let public_routes = Router::new()
         .route("/", get(root))
         .route("/health", get(health))
-        .route("/api/auth/register", post(register_user))
-        .route("/api/auth/login", post(login_user))
-        .route(&oauth_callback_route, get(oauth_process_callback));
+        .route(&oauth_callback_route, get(oauth_process_callback))
+        .merge(auth_routes);
 
     let protected_routes = Router::new()
         .route("/api/auth/me", get(get_current_user))
@@ -255,9 +286,12 @@ async fn main() -> anyhow::Result<()> {
         info!("Received Ctrl+C signal, initiating graceful shutdown...");
     };
 
-    axum::serve(listener, app)
-        .with_graceful_shutdown(shutdown_signal)
-        .await?;
+    axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .with_graceful_shutdown(shutdown_signal)
+    .await?;
 
     info!("Server shutdown complete");
 

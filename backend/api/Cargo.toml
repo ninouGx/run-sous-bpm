@@ -21,5 +21,7 @@ strum = { workspace = true, features = ["derive"] }
 sea-orm = { workspace = true }
 axum-login = { workspace = true }
 tower-sessions = { workspace = true }
+tower-sessions-redis-store = { workspace = true }
+tower_governor = { workspace = true }
 validator = { workspace = true, features = ["derive"] }
 urlencoding = { workspace = true }

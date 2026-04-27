@@ -38,7 +38,9 @@ sha2 = "0.10.9"
 rand = "0.9.2"
 rand_core = { version = "0.9.3", features = ["std"] }
 base64 = "0.22.1"
-tower-sessions = { version = "0.14.0", features = ["memory-store"] }
+tower-sessions = { version = "0.14.0" }
+tower-sessions-redis-store = "0.16.0"
+tower_governor = { version = "0.8.0", features = ["axum"] }
 validator = "0.20.0"
 async-trait = "0.1.89"
 lastfm-client = "2.1.0"
