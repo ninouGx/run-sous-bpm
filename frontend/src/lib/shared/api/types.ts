@@ -59,7 +59,6 @@ export interface TrackInfo {
   album_name?: string;
 }
 
-// TODO: Remove this compatibility type once UI is updated to use segments directly
 export interface TrackWithTimestamp {
   played_at: string;
   track_name: string;

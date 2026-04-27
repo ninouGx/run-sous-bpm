@@ -6,7 +6,7 @@ class ApiClient {
 
   constructor() {
     // En dev : localhost, en prod : variable d'environnement
-    this.baseUrl = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    this.baseUrl = import.meta.env.VITE_API_URL ?? "";
   }
 
   /**
